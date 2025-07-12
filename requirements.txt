@@ -1,0 +1,12 @@
+pandas
+scikit-learn
+xgboost
+matplotlib
+seaborn
+joblib
+lightgbm  # optional, will be used if installed 
+tqdm 
+fastapi
+uvicorn
+jinja2 
+python-multipart
