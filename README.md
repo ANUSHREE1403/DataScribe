@@ -1,4 +1,4 @@
-# AutoML Genie 🧞‍♂️
+# Auto Genie 🧞‍♂️
 
 **Your Personal AutoML Assistant** - A powerful Python tool for automated machine learning with both CLI and web interfaces.
 
