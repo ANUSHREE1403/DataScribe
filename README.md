@@ -212,7 +212,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Issues**: [GitHub Issues](https://github.com/yourusername/datascribe/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/datascribe/discussions)
-- **Email**: support@datascribe.ai
+- **Email**: workanushree14@gmail.com
 
 ## 🔮 Roadmap
 
