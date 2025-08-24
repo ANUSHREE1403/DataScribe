@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataScribe - Analysis Results</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .back-btn {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 0.5rem 1rem;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            transition: background 0.3s ease;
+        }
+        .back-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .results-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .results-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        .results-header h2 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        .results-content {
+            padding: 2rem;
+        }
+        .section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border: 1px solid #e1e5e9;
+            border-radius: 10px;
+            background: #f8f9fa;
+        }
+        .section h3 {
+            color: #333;
+            margin-top: 0;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        .metric-card {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e1e5e9;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .visualization {
+            text-align: center;
+            margin: 1rem 0;
+        }
+        .visualization img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .download-section {
+            background: #e3f2fd;
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 2rem;
+        }
+        .download-btn {
+            display: inline-block;
+            background: #2196f3;
+            color: white;
+            padding: 1rem 2rem;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 0.5rem;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+        .download-btn:hover {
+            background: #1976d2;
+        }
+        .quality-score {
+            text-align: center;
+            margin: 2rem 0;
+        }
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(#4caf50 0deg, #4caf50 0deg, #e0e0e0 0deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+        }
+        .insights {
+            background: #fff3e0;
+            padding: 1.5rem;
+            border-radius: 10px;
+            border-left: 4px solid #ff9800;
+        }
+        .insights h4 {
+            color: #e65100;
+            margin-top: 0;
+        }
+        .insights ul {
+            margin: 0;
+            padding-left: 1.5rem;
+        }
+        .insights li {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 DataScribe</h1>
+            <p>Analysis Results</p>
+        </div>
+        
+        <a href="/" class="back-btn">← Back to Upload</a>
+        
+        <div class="results-container">
+            <div class="results-header">
+                <h2>📊 Analysis Complete!</h2>
+                <p>Your dataset has been analyzed successfully</p>
+            </div>
+            
+            <div class="results-content">
+                <!-- Dataset Overview -->
+                <div class="section">
+                    <h3>📋 Dataset Overview</h3>
+                    <div class="metric-grid">
+                        <div class="metric-card">
+                            <div class="metric-value">{{ analysis_results.overview.shape[0] if analysis_results.overview and analysis_results.overview.shape else 'N/A' }}</div>
+                            <div class="metric-label">Rows</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ analysis_results.overview.shape[1] if analysis_results.overview and analysis_results.overview.shape else 'N/A' }}</div>
+                            <div class="metric-label">Columns</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ "%.2f MB"|format(analysis_results.overview.memory_usage) if analysis_results.overview and analysis_results.overview.memory_usage else 'N/A' }}</div>
+                            <div class="metric-label">Memory Usage</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ analysis_results.overview.columns.numerical if analysis_results.overview and analysis_results.overview.columns else 'N/A' }}</div>
+                            <div class="metric-label">Numerical Columns</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ analysis_results.overview.columns.categorical if analysis_results.overview and analysis_results.overview.columns else 'N/A' }}</div>
+                            <div class="metric-label">Categorical Columns</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ analysis_results.overview.columns.datetime if analysis_results.overview and analysis_results.overview.columns else 'N/A' }}</div>
+                            <div class="metric-label">Datetime Columns</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Data Quality -->
+                <div class="section">
+                    <h3>🔍 Data Quality Assessment</h3>
+                    <div class="quality-score">
+                        <div class="score-circle">
+                            {{ analysis_results.data_quality.data_quality_score if analysis_results.data_quality and analysis_results.data_quality.data_quality_score else 'N/A' }}%
+                        </div>
+                        <p><strong>Overall Quality Score</strong></p>
+                    </div>
+                    
+                    <div class="metric-grid">
+                        <div class="metric-card">
+                            <div class="metric-value">{{ analysis_results.data_quality.missing_values.total_missing if analysis_results.data_quality and analysis_results.data_quality.missing_values else 'N/A' }}</div>
+                            <div class="metric-label">Missing Values</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ analysis_results.data_quality.duplicates.count if analysis_results.data_quality and analysis_results.data_quality.duplicates else 'N/A' }}</div>
+                            <div class="metric-label">Duplicate Rows</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ analysis_results.data_quality.constant_columns|length if analysis_results.data_quality and analysis_results.data_quality.constant_columns else 'N/A' }}</div>
+                            <div class="metric-label">Constant Columns</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Visualizations -->
+                {% if job.visualization_urls %}
+                <div class="section">
+                    <h3>📈 Data Visualizations</h3>
+                    {% for plot_type, plot_url in job.visualization_urls.items() %}
+                    <div class="visualization">
+                        <h4>{{ plot_type|title }}</h4>
+                        <img src="{{ plot_url }}" alt="{{ plot_type }} visualization">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                <!-- AI Insights -->
+                {% if analysis_results.insights %}
+                <div class="section">
+                    <h3>🤖 AI Insights</h3>
+                    <div class="insights">
+                        <h4>Key Findings:</h4>
+                        <ul>
+                            {% for insight in analysis_results.insights.data_quality_insights %}
+                            <li>{{ insight }}</li>
+                            {% endfor %}
+                            {% for insight in analysis_results.insights.feature_insights %}
+                            <li>{{ insight }}</li>
+                            {% endfor %}
+                            {% for insight in analysis_results.insights.recommendations %}
+                            <li>{{ insight }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Download Section -->
+                <div class="download-section">
+                    <h3>📥 Download Results</h3>
+                    <p>Get your analysis results in various formats. Choose the format that best suits your needs:</p>
+                    <div style="margin-bottom: 1rem; text-align: center; color: #666;">
+                        <small>
+                            📄 <strong>PDF Report:</strong> Professional analysis report with visualizations for presentations and printing<br>
+                            📊 <strong>Excel Report:</strong> Structured data with multiple sheets for further analysis<br>
+                            🌐 <strong>HTML Report:</strong> Web-friendly format for sharing and viewing online<br>
+                            🐍 <strong>Python Code:</strong> Reproducible analysis code for further development<br>
+                            📈 <strong>R Code:</strong> R-based analysis code for statistical analysis<br>
+                            📁 <strong>Original Dataset:</strong> Your cleaned and processed data file
+                        </small>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center;">
+                        <a href="/download/{{ job.job_id }}/report/pdf" class="download-btn" style="background: #d32f2f;">📄 PDF Report</a>
+                        <a href="/download/{{ job.job_id }}/report/excel" class="download-btn" style="background: #388e3c;">📊 Excel Report</a>
+                        <a href="/download/{{ job.job_id }}/report/html" class="download-btn" style="background: #1976d2;">🌐 HTML Report</a>
+                        <a href="/download/{{ job.job_id }}/code/python" class="download-btn" style="background: #ff6f00;">🐍 Python Code</a>
+                        <a href="/download/{{ job.job_id }}/code/r" class="download-btn" style="background: #0277bd;">📈 R Code</a>
+                        <a href="/download/{{ job.job_id }}/dataset" class="download-btn" style="background: #7b1fa2;">📁 Original Dataset</a>
+                        <a href="/api/results/{{ job.job_id }}" class="download-btn" style="background: #ff9800;">🔗 JSON API</a>
+                        <a href="/" class="download-btn" style="background: #607d8b;">🔄 New Analysis</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

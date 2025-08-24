@@ -1,168 +1,233 @@
-# Auto Genie 🧞‍♂️
+# DataScribe
 
-**Your Personal AutoML Assistant** - A powerful Python tool for automated machine learning with both CLI and web interfaces.
+**Democratizing Data Analysis: Automated EDA with Human-Readable Insights**
 
-## 🚀 Features
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-### Core Capabilities
-- **📊 Automatic EDA (Exploratory Data Analysis)**: Shape, missing values, data types, correlations, target distribution
-- **🔧 Smart Preprocessing**: Missing value imputation, one-hot encoding, feature scaling
-- **🤖 Multi-Model Training**: Logistic/Linear Regression, RandomForest, XGBoost, KNN, SVM, LightGBM
-- **📈 Model Evaluation**: Comprehensive classification and regression metrics
-- **🏆 Model Selection**: Automatic best model selection with comparison tables
-- **💾 Model Persistence**: Save trained models as .pkl files
+## 🚀 Overview
 
-### Dual Interface
-- **🖥️ Web Interface**: User-friendly web UI with real-time training progress
-- **💻 CLI Interface**: Command-line tool for automation and scripting
+DataScribe is an AI-powered Exploratory Data Analysis (EDA) platform that automates the entire data analysis workflow. It transforms raw datasets into comprehensive, human-readable insights with beautiful visualizations and actionable recommendations.
 
-## 🛠️ Installation
+## ✨ Features
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/ANUSHREE1403/Auto-Genie.git
-   cd Auto-Genie/auto-genie
-   ```
+### Version 1 MVP (Current)
+- **📊 Automated EDA**: Comprehensive data analysis with configurable sections
+- **🔍 Data Quality Assessment**: Missing values, duplicates, outliers detection
+- **📈 Smart Visualizations**: Univariate, bivariate, and multivariate analysis plots
+- **📋 Report Generation**: HTML, PDF, and Excel export capabilities
+- **🎯 Target Analysis**: Optional target variable analysis for ML tasks
+- **💡 AI Insights**: Automated recommendations and data quality scoring
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## 📖 Usage
-
-### Web Interface (Recommended)
-
-1. **Start the web server**:
-   ```bash
-   python app.py
-   ```
-
-2. **Open your browser** and navigate to `http://localhost:8000`
-
-3. **Upload your CSV file** and configure:
-   - Target column selection
-   - Task type (classification/regression)
-   - Test size
-   - Model selection
-
-4. **Monitor training progress** in real-time
-
-5. **Download trained models** directly from the web interface
-
-### CLI Interface
-
-```bash
-python main.py --csv path/to/data.csv --target target_column_name [--task classification|regression] [--test-size 0.2] [--output best_model.pkl]
-```
-
-#### Parameters:
-- `--csv`: Path to your CSV file (required)
-- `--target`: Name of the target column (required)
-- `--task`: Task type (`classification` or `regression`). Auto-inferred if not provided
-- `--test-size`: Fraction for test set (default: 0.2)
-- `--output`: Output path for saved model (default: best_model.pkl)
-
-#### Example:
-```bash
-python main.py --csv data/iris.csv --target species --task classification
-```
+### Planned Features (Version 2)
+- **🔐 User Authentication**: Login/signup with OAuth support
+- **💾 History Dashboard**: Save and retrieve past analyses
+- **📝 Feedback System**: Rate and comment on analysis quality
+- **🌐 Cloud Deployment**: Multi-user access and collaboration
+- **🔧 Code Export**: Python/R scripts reproducing analysis steps
 
 ## 🏗️ Project Structure
 
 ```
-auto-genie/
-├── app.py              # Web interface (FastAPI)
-├── main.py             # CLI interface
-├── eda.py              # Exploratory Data Analysis
-├── preprocess.py       # Data preprocessing
-├── train_models.py     # Model training
-├── evaluate.py         # Model evaluation
-├── utils.py            # Utility functions
-├── templates/          # Web interface templates
-│   ├── form.html       # Upload form
-│   └── results.html    # Results display
-├── jobs/               # Job tracking for web interface
-├── requirements.txt    # Python dependencies
-└── README.md          # This file
+datascribe/
+├── 📁 core/                    # Core EDA engine and analysis
+├── 📁 web/                     # Web application and API
+├── 📁 reports/                 # Report generation and templates
+├── 📁 utils/                   # Utility functions and helpers
+├── 📁 tests/                   # Test suite and examples
+├── 📁 docs/                    # Documentation and guides
+├── 📁 examples/                # Sample datasets and demos
+└── 📁 deployment/              # Deployment configurations
 ```
-
-## 🎯 Supported Models
-
-### Classification Models
-- Logistic Regression
-- Random Forest
-- XGBoost
-- K-Nearest Neighbors (KNN)
-- Support Vector Machine (SVM)
-- LightGBM (optional)
-
-### Regression Models
-- Linear Regression
-- Random Forest
-- XGBoost
-- K-Nearest Neighbors (KNN)
-- Support Vector Machine (SVM)
-- LightGBM (optional)
-
-## 📊 Evaluation Metrics
-
-### Classification Metrics
-- Accuracy
-- Precision
-- Recall
-- F1-Score
-- ROC-AUC
-
-### Regression Metrics
-- R² Score
-- Mean Absolute Error (MAE)
-- Mean Squared Error (MSE)
-- Root Mean Squared Error (RMSE)
-
-## 🔧 Requirements
-
-- **Python**: 3.7+
-- **Key Dependencies**:
-  - pandas
-  - scikit-learn
-  - xgboost
-  - fastapi
-  - uvicorn
-  - jinja2
-  - joblib
-
-See `requirements.txt` for complete dependency list.
 
 ## 🚀 Quick Start
 
-1. **For Web Interface**:
+### Prerequisites
+- Python 3.8+
+- pip or conda
+
+### Installation
+
+1. **Clone the repository**
    ```bash
-   python app.py
-   # Open http://localhost:8000 in your browser
+   git clone https://github.com/yourusername/datascribe.git
+   cd datascribe
    ```
 
-2. **For CLI**:
+2. **Install dependencies**
    ```bash
-   python main.py --csv your_data.csv --target target_column
+   pip install -r requirements.txt
    ```
 
-## 📝 Notes
+3. **Run the application**
+   ```bash
+   python web/main.py
+   ```
 
-- **LightGBM**: Optional dependency. If not installed, it will be skipped automatically
-- **Model Persistence**: All trained models are saved as .pkl files using joblib
-- **Real-time Progress**: Web interface shows live training progress
-- **Job Tracking**: Web interface maintains job history for model downloads
-- **Auto-inference**: Task type (classification/regression) is automatically detected if not specified
+4. **Open your browser**
+   Navigate to `http://localhost:8000`
+
+## 📖 Usage
+
+### Web Interface
+1. Upload your dataset (CSV, Excel, Parquet)
+2. Configure analysis options (target column, visualization preferences)
+3. Run the analysis
+4. View results and download reports
+
+### API Usage
+```python
+import requests
+
+# Upload and analyze dataset
+files = {'file': open('dataset.csv', 'rb')}
+data = {
+    'target_column': 'target',
+    'include_plots': True,
+    'include_code': False
+}
+
+response = requests.post('http://localhost:8000/analyze', 
+                       files=files, data=data)
+result = response.json()
+
+# Get analysis results
+job_id = result['job_id']
+results = requests.get(f'http://localhost:8000/api/results/{job_id}').json()
+```
+
+## 🔧 Configuration
+
+Create a `.env` file in the root directory:
+
+```env
+# App Configuration
+APP_NAME=DataScribe
+DEBUG=False
+
+# Database (for future versions)
+DATABASE_URL=postgresql://user:password@localhost/datascribe
+
+# File Storage
+UPLOAD_DIR=uploads
+REPORTS_DIR=reports
+MAX_FILE_SIZE=100MB
+
+# EDA Settings
+MAX_ROWS_FOR_ANALYSIS=100000
+CORRELATION_THRESHOLD=0.7
+```
+
+## 📊 Supported Data Formats
+
+- **CSV** (.csv)
+- **Excel** (.xlsx, .xls)
+- **Parquet** (.parquet)
+
+## 🎨 Visualization Features
+
+- **Dataset Overview**: Data types, missing values, column distributions
+- **Data Quality**: Missing values heatmap, quality scoring
+- **Univariate Analysis**: Histograms, distributions, outlier detection
+- **Bivariate Analysis**: Correlation matrices, feature relationships
+- **Multivariate Analysis**: PCA, feature importance
+- **Target Analysis**: Classification/regression target insights
+
+## 📈 Report Types
+
+### HTML Reports
+- Interactive, responsive design
+- Embedded visualizations
+- Professional styling
+- Mobile-friendly
+
+### PDF Reports
+- Print-ready format
+- High-quality graphics
+- Professional appearance
+- Easy sharing
+
+### Excel Reports
+- Multiple worksheets
+- Structured data
+- Formatted tables
+- Business-friendly
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+pytest tests/
+```
+
+## 📚 Documentation
+
+- [User Guide](docs/user-guide.md)
+- [API Reference](docs/api-reference.md)
+- [Developer Guide](docs/developer-guide.md)
+- [Examples](examples/)
+
+## 🚀 Deployment
+
+### Local Development
+```bash
+python web/main.py
+```
+
+### Production
+```bash
+gunicorn web.main:app -w 4 -k uvicorn.workers.UvicornWorker
+```
+
+### Docker
+```bash
+docker build -t datascribe .
+docker run -p 8000:8000 datascribe
+```
 
 ## 📄 License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [FastAPI](https://fastapi.tiangolo.com/)
+- Visualization powered by [Matplotlib](https://matplotlib.org/) and [Seaborn](https://seaborn.pydata.org/)
+- Data analysis with [Pandas](https://pandas.pydata.org/) and [NumPy](https://numpy.org/)
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/datascribe/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/datascribe/discussions)
+- **Email**: support@datascribe.ai
+
+## 🔮 Roadmap
+
+- [x] Core EDA Engine
+- [x] Visualization System
+- [x] Report Generation
+- [x] Web Interface
+- [ ] User Authentication
+- [ ] History Dashboard
+- [ ] Feedback System
+- [ ] Cloud Deployment
+- [ ] Mobile App
 
 ---
 
-**Made with ❤️ for the ML community**
+**Made with ❤️ by the DataScribe Team**
+
+*Democratizing data analysis, one dataset at a time.*
