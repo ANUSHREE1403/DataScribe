@@ -2,7 +2,6 @@ from fastapi import FastAPI, File, UploadFile, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-import pandas as pd
 import os
 import uuid
 import json
@@ -11,8 +10,14 @@ import shutil
 from datetime import datetime
 
 # Import DataScribe components
-from core.eda_engine import run_eda
-from core.visualization_engine import generate_visualizations
+try:
+    from core.eda_engine import run_eda
+    from core.visualization_engine import generate_visualizations
+    CORE_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Core components not available: {e}")
+    CORE_AVAILABLE = False
+
 from utils.config import settings
 
 # Report generation imports
@@ -54,9 +59,11 @@ os.makedirs("static", exist_ok=True)
 # Store analysis jobs
 jobs = {}
 
-def load_dataset(file: UploadFile) -> pd.DataFrame:
+def load_dataset(file: UploadFile):
     """Load dataset from uploaded file"""
     try:
+        import pandas as pd
+        
         if file.filename.endswith('.csv'):
             df = pd.read_csv(file.file)
         elif file.filename.endswith(('.xlsx', '.xls')):
@@ -83,8 +90,7 @@ async def home(request: Request):
 async def analyze_dataset(
     file: UploadFile = File(...),
     target_column: Optional[str] = Form(None),
-    include_plots: bool = Form(True),
-    include_code: bool = Form(False)
+    include_plots: bool = Form(True)
 ):
     """Analyze uploaded dataset"""
     
@@ -109,6 +115,10 @@ async def analyze_dataset(
         # Store original filename
         original_filename = file.filename
         
+        # Check if core components are available
+        if not CORE_AVAILABLE:
+            raise HTTPException(status_code=500, detail="Core analysis components not available. Please check dependencies.")
+        
         # Run EDA analysis
         print(f"Starting EDA analysis for job {job_id}")
         analysis_results = run_eda(df, target_column)
@@ -116,28 +126,48 @@ async def analyze_dataset(
         
         # Generate visualizations if requested
         plot_files = {}
-        if include_plots:
+        if include_plots and CORE_AVAILABLE:
             print(f"Generating visualizations for job {job_id}")
             # Ensure static directory exists
             os.makedirs("static", exist_ok=True)
             
             plot_files = generate_visualizations(df, analysis_results, target_column)
             print(f"Visualizations generated: {list(plot_files.keys())}")
+            print(f"Plot files content: {plot_files}")
             
-            # Move plots to static directory
+            # Move plots to static directory and update URLs
             for plot_type, plot_file in plot_files.items():
-                if os.path.exists(plot_file):
-                    new_path = os.path.join("static", f"{job_id}_{plot_type}.png")
-                    shutil.move(plot_file, new_path)
-                    plot_files[plot_type] = f"/static/{job_id}_{plot_type}.png"
-                    print(f"Moved {plot_type} plot to {new_path}")
+                print(f"Processing {plot_type}: {plot_file}")
+                if plot_file and plot_file != "no_target_data.png":
+                    # Check if the file exists in current directory
+                    if os.path.exists(plot_file):
+                        new_path = os.path.join("static", f"{job_id}_{plot_type}.png")
+                        shutil.move(plot_file, new_path)
+                        plot_files[plot_type] = f"/static/{job_id}_{plot_type}.png"
+                        print(f"Moved {plot_type} plot to {new_path}")
+                    else:
+                        print(f"Warning: Plot file {plot_file} not found for {plot_type}")
+                        plot_files[plot_type] = None
+                else:
+                    print(f"Skipping {plot_type} plot (no data or placeholder)")
+                    plot_files[plot_type] = None
+        elif include_plots:
+            print("Visualizations requested but core components not available")
+            plot_files = {}
         
         # Store job results with both file paths and URLs for visualizations
         visualization_paths = {}
         for plot_type, plot_file in plot_files.items():
-            if os.path.exists(plot_file):
-                new_path = os.path.join("static", f"{job_id}_{plot_type}.png")
-                visualization_paths[plot_type] = new_path  # Store actual file path
+            if plot_file and plot_file.startswith("/static/"):
+                # Extract the actual file path from the URL
+                file_name = plot_file.split("/")[-1]
+                actual_path = os.path.join("static", file_name)
+                visualization_paths[plot_type] = actual_path  # Store actual file path
+                print(f"Stored visualization path for {plot_type}: {actual_path}")
+            elif plot_file is None:
+                print(f"Skipping {plot_type} - no visualization generated")
+            else:
+                print(f"Warning: Unexpected plot_file value for {plot_type}: {plot_file}")
         
         jobs[job_id] = {
             "job_id": job_id,
@@ -148,10 +178,17 @@ async def analyze_dataset(
             "visualization_urls": plot_files,  # Store URLs for web display
             "target_column": target_column,
             "include_plots": include_plots,
-            "include_code": include_code,
             "filename": original_filename,
             "created_at": datetime.now().isoformat()
         }
+        
+        # Debug: Print what we stored
+        print(f"Job {job_id} stored with:")
+        print(f"  - Visualizations: {visualization_paths}")
+        print(f"  - Visualization URLs: {plot_files}")
+        print(f"  - Include plots: {include_plots}")
+        print(f"  - Plot files type: {type(plot_files)}")
+        print(f"  - Plot files keys: {list(plot_files.keys()) if plot_files else 'None'}")
         
         # Redirect to results page
         return RedirectResponse(url=f"/results/{job_id}", status_code=303)
@@ -182,17 +219,42 @@ def generate_python_code(job: dict, job_id: str) -> str:
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy import stats
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
 # Set style for better plots
-plt.style.use('seaborn')
-sns.set_palette("husl")
+plt.style.use('default')
+
+# Try to use seaborn if available
+try:
+    import seaborn as sns
+    sns.set_palette("husl")
+    print("Using seaborn for enhanced plots")
+except ImportError:
+    print("Using matplotlib default style")
 
 # Load your dataset
 # df = pd.read_csv('your_dataset.csv')  # Replace with your file path
+# df = pd.read_excel('your_dataset.xlsx')  # For Excel files
+# df = pd.read_parquet('your_dataset.parquet')  # For Parquet files
+
+# IMPORTANT: Uncomment and modify one of the lines above to load your actual dataset
+# Example: df = pd.read_csv('your_dataset.csv')
+
+# For demonstration purposes, create a sample dataset
+# Remove this section when you load your actual data
+print("Creating sample dataset for demonstration...")
+np.random.seed(42)
+n_samples = 1000
+df = pd.DataFrame({{
+    'feature_1': np.random.normal(0, 1, n_samples),
+    'feature_2': np.random.normal(0, 1, n_samples),
+    'feature_3': np.random.choice(['A', 'B', 'C'], n_samples),
+    'target': np.random.choice([0, 1], n_samples)
+}})
+print("Sample dataset created successfully!")
+print()
 
 # Basic dataset info
 print("Dataset Shape:", df.shape)
@@ -212,8 +274,8 @@ print("\\n=== Statistical Summary ===")
 print(df.describe())
 
 # Column Analysis
-numerical_cols = df.select_dtypes(include=[np.number]).columns
-categorical_cols = df.select_dtypes(include=['object']).columns
+numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
 
 print(f"\\nNumerical Columns: {len(numerical_cols)}")
 print(f"Categorical Columns: {len(categorical_cols)}")
@@ -223,7 +285,24 @@ if len(numerical_cols) > 0:
     # Correlation Matrix
     plt.figure(figsize=(10, 8))
     correlation_matrix = df[numerical_cols].corr()
-    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0)
+    
+    # Try to use seaborn for heatmap, fallback to matplotlib
+    try:
+        import seaborn as sns
+        sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0)
+    except ImportError:
+        # Fallback to matplotlib
+        plt.imshow(correlation_matrix, cmap='coolwarm', aspect='auto')
+        plt.colorbar()
+        plt.xticks(range(len(correlation_matrix.columns)), correlation_matrix.columns, rotation=45)
+        plt.yticks(range(len(correlation_matrix.columns)), correlation_matrix.columns)
+        
+        # Add correlation values as text
+        for i in range(len(correlation_matrix.columns)):
+            for j in range(len(correlation_matrix.columns)):
+                plt.text(j, i, f'{correlation_matrix.iloc[i, j]:.2f}', 
+                        ha='center', va='center', color='white' if abs(correlation_matrix.iloc[i, j]) > 0.5 else 'black')
+    
     plt.title('Correlation Matrix')
     plt.tight_layout()
     plt.show()
@@ -279,10 +358,10 @@ print("Customize it based on your specific dataset and analysis goals.")
         with open(code_path, 'w', encoding='utf-8') as f:
             f.write(code_content)
         
-        return code_path
+        return None
         
     except Exception as e:
-        print(f"Error generating Python code: {e}")
+        print(f"Python code generation disabled")
         return None
 
 def generate_r_code(job: dict, job_id: str) -> str:
@@ -303,6 +382,23 @@ library(gridExtra)
 
 # Load your dataset
 # df <- read.csv('your_dataset.csv')  # Replace with your file path
+# df <- read_excel('your_dataset.xlsx')  # For Excel files (requires readxl package)
+
+# IMPORTANT: Uncomment and modify one of the lines above to load your actual dataset
+# Example: df <- read.csv('your_dataset.csv')
+
+# For demonstration purposes, create a sample dataset
+# Remove this section when you load your actual data
+cat("Creating sample dataset for demonstration...\\n")
+set.seed(42)
+n_samples <- 1000
+df <- data.frame(
+    feature_1 = rnorm(n_samples, 0, 1),
+    feature_2 = rnorm(n_samples, 0, 1),
+    feature_3 = sample(c('A', 'B', 'C'), n_samples, replace = TRUE),
+    target = sample(c(0, 1), n_samples, replace = TRUE)
+)
+cat("Sample dataset created successfully!\\n\\n")
 
 # Basic dataset info
 cat("Dataset Shape:", nrow(df), "rows x", ncol(df), "columns\\n")
@@ -476,6 +572,35 @@ def generate_html_report(job: dict) -> str:
         </div>
         
         <div class="section">
+            <h2>📊 Visualizations</h2>
+    """
+    
+    # Add visualizations if available
+    visualization_urls = job.get("visualization_urls", {})
+    print(f"HTML Report - Visualization URLs: {visualization_urls}")
+    print(f"HTML Report - Job keys: {list(job.keys())}")
+    
+    if visualization_urls:
+        for viz_name, viz_url in visualization_urls.items():
+            print(f"HTML Report - Processing {viz_name}: {viz_url}")
+            if viz_url:
+                # Convert relative paths to static URLs
+                if not viz_url.startswith("/static/"):
+                    viz_url = f"/static/{viz_url}"
+                
+                html_content += f"""
+                <div style="margin: 20px 0; text-align: center;">
+                    <h3>{viz_name.replace('_', ' ').title()}</h3>
+                    <img src="{viz_url}" alt="{viz_name} visualization" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px;">
+                </div>
+                """
+    else:
+        html_content += "<p>No visualizations were generated for this analysis.</p>"
+    
+    html_content += """
+        </div>
+        
+        <div class="section">
             <h2>🤖 AI Insights</h2>
             <ul>
     """
@@ -609,21 +734,27 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         story.append(Paragraph(f"Generated on: {timestamp}", styles['Normal']))
         story.append(Spacer(1, 40))
         
-        # Debug: Show available data keys
-        story.append(Paragraph("🔍 Available Data Keys:", styles['Heading3']))
-        available_keys = list(analysis_results.keys())
-        for key in available_keys:
-            story.append(Paragraph(f"• {key}", styles['Normal']))
+        # Report Summary
+        story.append(Paragraph("📋 Report Summary", styles['Heading3']))
+        story.append(Paragraph("This report provides a comprehensive analysis of your dataset including data quality assessment, statistical summaries, and AI-powered insights.", styles['Normal']))
         story.append(Spacer(1, 20))
         
         # Table of Contents
         story.append(Paragraph("📋 Table of Contents", styles['Heading2']))
-        story.append(Paragraph("1. Dataset Overview", styles['Normal']))
-        story.append(Paragraph("2. Data Quality Assessment", styles['Normal']))
-        story.append(Paragraph("3. Statistical Summary", styles['Normal']))
-        story.append(Paragraph("4. Column Analysis", styles['Normal']))
-        story.append(Paragraph("5. Visualizations", styles['Normal']))
-        story.append(Paragraph("6. AI Insights & Recommendations", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        toc_items = [
+            "1. Dataset Overview",
+            "2. Data Quality Assessment", 
+            "3. Statistical Summary",
+            "4. Visualizations",
+            "5. AI Insights & Recommendations"
+        ]
+        
+        for item in toc_items:
+            story.append(Paragraph(item, styles['Normal']))
+            story.append(Spacer(1, 8))
+        
         story.append(PageBreak())
         
         # Dataset Overview
@@ -631,56 +762,109 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         story.append(Spacer(1, 12))
         
         overview = analysis_results.get('overview', {})
+        
+        # Create overview metrics with better formatting
         overview_data = [
-            ['Metric', 'Value'],
-            ['Rows', str(overview.get('shape', [0, 0])[0])],
-            ['Columns', str(overview.get('shape', [0, 0])[1])],
-            ['Memory Usage', f"{overview.get('memory_usage', 0):.2f} MB"],
-            ['Numerical Columns', str(overview.get('columns', {}).get('numerical', 0))],
-            ['Categorical Columns', str(overview.get('columns', {}).get('categorical', 0))],
-            ['Datetime Columns', str(overview.get('columns', {}).get('datetime', 0))]
+            ['Dataset Metric', 'Value', 'Description'],
+            ['Total Rows', f"{overview.get('shape', [0, 0])[0]:,}", 'Number of data records'],
+            ['Total Columns', str(overview.get('shape', [0, 0])[1]), 'Number of features/variables'],
+            ['Memory Usage', f"{overview.get('memory_usage', 0):.2f} MB", 'Storage space required'],
+            ['Numerical Features', str(overview.get('columns', {}).get('numerical', 0)), 'Continuous/numeric variables'],
+            ['Categorical Features', str(overview.get('columns', {}).get('categorical', 0)), 'Text/category variables'],
+            ['Datetime Features', str(overview.get('columns', {}).get('datetime', 0)), 'Date/time variables']
         ]
         
         overview_table = Table(overview_data)
         overview_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#17A2B8')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8F9FA')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#DEE2E6')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F8F9FA')])
         ]))
         story.append(overview_table)
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 15))
         
-        # Data Quality
+        # Add dataset insights
+        story.append(Paragraph("💡 Dataset Insights", styles['Heading3']))
+        total_rows = overview.get('shape', [0, 0])[0]
+        total_cols = overview.get('shape', [0, 0])[1]
+        
+        if total_rows > 10000:
+            story.append(Paragraph("• Large dataset with substantial data for robust analysis", styles['Normal']))
+        elif total_rows > 1000:
+            story.append(Paragraph("• Medium-sized dataset suitable for most analytical tasks", styles['Normal']))
+        else:
+            story.append(Paragraph("• Compact dataset - consider data augmentation for complex models", styles['Normal']))
+        
+        if total_cols > 50:
+            story.append(Paragraph("• High-dimensional dataset - feature selection may be beneficial", styles['Normal']))
+        elif total_cols > 10:
+            story.append(Paragraph("• Balanced feature set for comprehensive analysis", styles['Normal']))
+        else:
+            story.append(Paragraph("• Low-dimensional dataset - consider feature engineering", styles['Normal']))
+        
+        story.append(Spacer(1, 20))
+        story.append(PageBreak())
+        
+        # Data Quality Assessment
         story.append(Paragraph("🔍 Data Quality Assessment", styles['Heading2']))
         story.append(Spacer(1, 12))
         
         quality = analysis_results.get('data_quality', {})
-        quality_data = [
-            ['Metric', 'Value'],
-            ['Quality Score', f"{quality.get('data_quality_score', 0):.1f}%"],
-            ['Missing Values', str(quality.get('missing_values', {}).get('total_missing', 0))],
-            ['Duplicate Rows', str(quality.get('duplicates', {}).get('count', 0))],
-            ['Constant Columns', str(len(quality.get('constant_columns', [])))]
+        
+        # Create quality score indicator
+        quality_score = quality.get('data_quality_score', 0)
+        quality_color = colors.HexColor('#28A745') if quality_score >= 80 else colors.HexColor('#FFC107') if quality_score >= 60 else colors.HexColor('#DC3545')
+        quality_status = "Excellent" if quality_score >= 80 else "Good" if quality_score >= 60 else "Needs Improvement"
+        
+        # Quality overview table
+        quality_overview = [
+            ['Quality Metric', 'Value', 'Status'],
+            ['Overall Quality Score', f"{quality_score:.1f}%", quality_status],
+            ['Missing Values', str(quality.get('missing_values', {}).get('total_missing', 0)), '✓' if quality.get('missing_values', {}).get('total_missing', 0) == 0 else '⚠'],
+            ['Duplicate Rows', str(quality.get('duplicates', {}).get('count', 0)), '⚠' if quality.get('duplicates', {}).get('count', 0) > 0 else '✓'],
+            ['Constant Columns', str(len(quality.get('constant_columns', []))), '⚠' if len(quality.get('constant_columns', [])) > 0 else '✓']
         ]
         
-        quality_table = Table(quality_data)
+        quality_table = Table(quality_overview)
         quality_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#495057')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8F9FA')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#DEE2E6')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F8F9FA')])
         ]))
         story.append(quality_table)
+        story.append(Spacer(1, 15))
+        
+        # Add quality insights
+        story.append(Paragraph("💡 Quality Insights", styles['Heading3']))
+        if quality_score >= 80:
+            story.append(Paragraph("• Your dataset has excellent data quality!", styles['Normal']))
+        elif quality_score >= 60:
+            story.append(Paragraph("• Your dataset has good data quality with some areas for improvement.", styles['Normal']))
+        else:
+            story.append(Paragraph("• Your dataset needs attention to improve data quality.", styles['Normal']))
+        
+        # Add specific recommendations
+        if quality.get('missing_values', {}).get('total_missing', 0) > 0:
+            story.append(Paragraph(f"• Consider handling {quality.get('missing_values', {}).get('total_missing', 0)} missing values", styles['Normal']))
+        if quality.get('duplicates', {}).get('count', 0) > 0:
+            story.append(Paragraph(f"• {quality.get('duplicates', {}).get('count', 0)} duplicate rows detected - review for data integrity", styles['Normal']))
+        if len(quality.get('constant_columns', [])) > 0:
+            story.append(Paragraph(f"• {len(quality.get('constant_columns', []))} constant columns detected - consider removal", styles['Normal']))
+        
         story.append(Spacer(1, 20))
+        story.append(PageBreak())
         
         # Statistical Summary
         story.append(Paragraph("📈 Statistical Summary", styles['Heading2']))
@@ -688,79 +872,131 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         
         stats = analysis_results.get('statistics', {})
         if stats:
+            # Create a comprehensive summary table
+            summary_headers = ['Column', 'Count', 'Mean', 'Std', 'Min', '25%', '50%', '75%', 'Max']
+            summary_data = [summary_headers]
+            
             for col_name, col_stats in stats.items():
                 if isinstance(col_stats, dict) and col_stats:
-                    story.append(Paragraph(f"<b>{col_name}</b>", styles['Heading3']))
-                    
-                    # Create stats table for this column
-                    stats_data = [['Statistic', 'Value']]
-                    for stat_name, stat_value in col_stats.items():
-                        if stat_name not in ['histogram', 'boxplot']:  # Skip plot data
-                            stats_data.append([stat_name.replace('_', ' ').title(), str(stat_value)])
-                    
-                    if len(stats_data) > 1:  # Only add table if we have data
-                        stats_table = Table(stats_data)
-                        stats_table.setStyle(TableStyle([
-                            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                            ('FONTSIZE', (0, 0), (-1, 0), 10),
-                            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                        ]))
-                        story.append(stats_table)
-                        story.append(Spacer(1, 10))
+                    row = [col_name]
+                    # Add key statistics in order
+                    for stat in ['count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max']:
+                        value = col_stats.get(stat, 'N/A')
+                        if isinstance(value, (int, float)):
+                            if stat in ['mean', 'std']:
+                                row.append(f"{value:.3f}")
+                            elif stat in ['25%', '50%', '75%']:
+                                row.append(f"{value:.2f}")
+                            else:
+                                row.append(str(value))
+                        else:
+                            row.append(str(value))
+                    summary_data.append(row)
+            
+            if len(summary_data) > 1:  # Only add table if we have data
+                summary_table = Table(summary_data)
+                summary_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E86AB')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F7F7F7')),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#CCCCCC')),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F0F0F0')])
+                ]))
+                story.append(summary_table)
+                story.append(Spacer(1, 15))
+                
+                # Add summary statistics
+                story.append(Paragraph("📊 Summary Statistics", styles['Heading3']))
+                story.append(Paragraph(f"• Total numerical columns analyzed: {len(summary_data) - 1}", styles['Normal']))
+                story.append(Paragraph(f"• Data points per column: {summary_data[1][1] if len(summary_data) > 1 else 'N/A'}", styles['Normal']))
+                story.append(Spacer(1, 10))
         
         story.append(Spacer(1, 20))
+        story.append(PageBreak())
         
         # Visualizations Section
         story.append(Paragraph("📊 Visualizations", styles['Heading2']))
         story.append(Spacer(1, 12))
         
-        # Debug: Show available visualizations
-        story.append(Paragraph("🔍 Available Visualizations:", styles['Heading3']))
+        # Visualizations Overview
         if visualizations:
-            for viz_name, viz_path in visualizations.items():
-                story.append(Paragraph(f"• {viz_name}: {viz_path}", styles['Normal']))
+            story.append(Paragraph("📊 Generated Visualizations", styles['Heading3']))
+            story.append(Spacer(1, 8))
+            
+            # Create a structured list of visualizations
+            viz_list = []
+            for viz_name in visualizations.keys():
+                viz_list.append(viz_name.replace('_', ' ').title())
+            
+            # Display visualizations in a more organized way
+            for i, viz_name in enumerate(viz_list, 1):
+                story.append(Paragraph(f"{i}. {viz_name}", styles['Normal']))
+            
+            story.append(Spacer(1, 15))
+            story.append(Paragraph("Below are the detailed visualizations for each analysis type:", styles['Normal']))
             story.append(Spacer(1, 10))
         else:
-            story.append(Paragraph("No visualizations available", styles['Normal']))
-        story.append(Spacer(1, 10))
+            story.append(Paragraph("No visualizations were generated for this analysis.", styles['Normal']))
+            story.append(Paragraph("This may be due to insufficient data or analysis configuration.", styles['Normal']))
+            story.append(Spacer(1, 10))
         
         # Add visualization images if they exist
         if visualizations:
-            for viz_name, viz_path in visualizations.items():
-                if os.path.exists(viz_path):
+            for i, (viz_name, viz_path) in enumerate(visualizations.items()):
+                if viz_path and os.path.exists(viz_path):
                     try:
-                        # Add visualization title
-                        story.append(Paragraph(f"<b>{viz_name.replace('_', ' ').title()}</b>", styles['Heading3']))
-                        story.append(Spacer(1, 6))
+                        # Add visualization title with better formatting
+                        story.append(Paragraph(f"📊 {viz_name.replace('_', ' ').title()}", styles['Heading3']))
+                        story.append(Spacer(1, 8))
                         
                         # Add the image
                         img = Image(viz_path)
                         img.drawHeight = 4 * inch
                         img.drawWidth = 6 * inch
                         story.append(img)
-                        story.append(Spacer(1, 10))
+                        story.append(Spacer(1, 15))
                         
-                        # Add page break if this is a large visualization
-                        if viz_name in ['correlation_matrix', 'pca_analysis']:
+                        # Add page break between visualizations for better organization
+                        if i < len(visualizations) - 1:  # Don't add page break after the last visualization
                             story.append(PageBreak())
+                            
                     except Exception as e:
                         print(f"Error adding visualization {viz_name}: {e}")
                         story.append(Paragraph(f"Visualization: {viz_name} (could not display)", styles['Normal']))
                         story.append(Spacer(1, 10))
+                else:
+                    print(f"Visualization path not found or invalid: {viz_name} -> {viz_path}")
+                    story.append(Paragraph(f"Visualization: {viz_name} (file not found)", styles['Normal']))
+                    story.append(Spacer(1, 10))
         
-        # AI Insights
+        story.append(PageBreak())
+        
+        # AI Insights & Recommendations
         story.append(Paragraph("🤖 AI Insights & Recommendations", styles['Heading2']))
         story.append(Spacer(1, 12))
         
         insights = analysis_results.get('insights', {})
-        for insight_type, insight_list in insights.items():
-            if insight_list:
-                story.append(Paragraph(f"<b>{insight_type.replace('_', ' ').title()}:</b>", styles['Heading3']))
-                for insight in insight_list:
-                    story.append(Paragraph(f"• {insight}", styles['Normal']))
-                story.append(Spacer(1, 6))
+        if insights:
+            for insight_type, insight_list in insights.items():
+                if insight_list:
+                    # Create a styled insight section
+                    story.append(Paragraph(f"📌 {insight_type.replace('_', ' ').title()}", styles['Heading3']))
+                    story.append(Spacer(1, 6))
+                    
+                    # Add insights with better formatting
+                    for i, insight in enumerate(insight_list, 1):
+                        story.append(Paragraph(f"{i}. {insight}", styles['Normal']))
+                    
+                    story.append(Spacer(1, 10))
+        else:
+            story.append(Paragraph("No specific insights available for this dataset.", styles['Normal']))
+            story.append(Paragraph("Consider running additional analysis or providing a target variable for more detailed recommendations.", styles['Normal']))
+        
+        story.append(Spacer(1, 20))
         
         # Build PDF
         print("Building PDF document...")
@@ -793,31 +1029,18 @@ async def get_results(request: Request, job_id: str):
             "error": job.get("error", "Unknown error")
         })
     
+    # Debug: Print what's being passed to template
+    print(f"Template data - Job keys: {list(job.keys())}")
+    print(f"Template data - Visualization URLs: {job.get('visualization_urls', 'NOT_FOUND')}")
+    print(f"Template data - Visualizations: {job.get('visualizations', 'NOT_FOUND')}")
+    
     return templates.TemplateResponse("results.html", {
         "request": request,
         "job": job,
         "analysis_results": job["analysis_results"]
     })
 
-@app.get("/api/results/{job_id}")
-async def get_results_api(job_id: str):
-    """Get analysis results as JSON API"""
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    job = jobs[job_id]
-    
-    if job["status"] == "failed":
-        raise HTTPException(status_code=500, detail=job.get("error", "Unknown error"))
-    
-    return {
-        "job_id": job_id,
-        "status": job["status"],
-        "analysis_results": job["analysis_results"],
-        "visualizations": job["visualizations"],
-        "target_column": job["target_column"],
-        "created_at": job["created_at"]
-    }
+
 
 @app.get("/download/{job_id}/dataset")
 async def download_dataset(job_id: str):
@@ -923,25 +1146,11 @@ async def download_pdf_report(job_id: str):
         filename=f"DataScribe_Report_{job_id}.pdf"
     )
 
-@app.get("/download/{job_id}/code/python")
-async def download_python_code(job_id: str):
-    """Download Python analysis code"""
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    
-    job = jobs[job_id]
-    
-    # Generate Python code
-    code_path = generate_python_code(job, job_id)
-    
-    if not code_path or not os.path.exists(code_path):
-        raise HTTPException(status_code=500, detail="Failed to generate Python code")
-    
-    return FileResponse(
-        code_path,
-        media_type='text/plain',
-        filename=f"DataScribe_Python_Code_{job_id}.py"
-    )
+# Python code download temporarily disabled
+# @app.get("/download/{job_id}/code/python")
+# async def download_python_code(job_id: str):
+#     """Download Python analysis code - TEMPORARILY DISABLED"""
+#     raise HTTPException(status_code=503, detail="Python code generation temporarily disabled")
 
 @app.get("/download/{job_id}/code/r")
 async def download_r_code(job_id: str):

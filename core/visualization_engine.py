@@ -3,17 +3,36 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for web
 import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+
+# Try to import seaborn, but make it optional
+try:
+    import seaborn as sns
+    SEABORN_AVAILABLE = True
+except ImportError:
+    SEABORN_AVAILABLE = False
+    print("Warning: seaborn not available, using matplotlib defaults")
+
+# Try to import plotly, but make it optional
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    print("Warning: plotly not available")
+
 from typing import Dict, List, Optional, Tuple
 import warnings
 warnings.filterwarnings('ignore')
 
 # Set style for better plots
 plt.style.use('default')
-sns.set_palette("husl")
+if SEABORN_AVAILABLE:
+    try:
+        sns.set_palette("husl")
+    except:
+        pass
 
 class DataScribeVisualizer:
     """
@@ -123,7 +142,12 @@ class DataScribeVisualizer:
         # 1. Missing values heatmap
         if quality_data.get('missing_values', {}).get('total_missing', 0) > 0:
             missing_matrix = self.df.isnull()
-            sns.heatmap(missing_matrix, cbar=True, ax=axes[0, 0], cmap='viridis')
+            if SEABORN_AVAILABLE:
+                sns.heatmap(missing_matrix, cbar=True, ax=axes[0, 0], cmap='viridis')
+            else:
+                # Fallback to matplotlib
+                im = axes[0, 0].imshow(missing_matrix, cmap='viridis', aspect='auto')
+                plt.colorbar(im, ax=axes[0, 0])
             axes[0, 0].set_title('Missing Values Heatmap')
         else:
             axes[0, 0].text(0.5, 0.5, 'No Missing Values', ha='center', va='center', transform=axes[0, 0].transAxes)
@@ -285,8 +309,17 @@ class DataScribeVisualizer:
         # Create mask for upper triangle
         mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
         
-        sns.heatmap(corr_matrix, mask=mask, annot=True, cmap='RdBu_r', center=0, 
-                   square=True, ax=axes[0], cbar_kws={"shrink": .8})
+        if SEABORN_AVAILABLE:
+            sns.heatmap(corr_matrix, mask=mask, annot=True, cmap='RdBu_r', center=0, 
+                       square=True, ax=axes[0], cbar_kws={"shrink": .8})
+        else:
+            # Fallback to matplotlib
+            im = axes[0].imshow(corr_matrix, cmap='RdBu_r', aspect='equal', vmin=-1, vmax=1)
+            axes[0].set_xticks(range(len(corr_matrix.columns)))
+            axes[0].set_yticks(range(len(corr_matrix.columns)))
+            axes[0].set_xticklabels(corr_matrix.columns, rotation=45)
+            axes[0].set_yticklabels(corr_matrix.columns)
+            plt.colorbar(im, ax=axes[0])
         axes[0].set_title('Correlation Matrix')
         
         # 2. High correlations bar plot

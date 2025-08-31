@@ -3,20 +3,38 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for web
 import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+
+# Try to import seaborn, but make it optional
+try:
+    import seaborn as sns
+    SEABORN_AVAILABLE = True
+except ImportError:
+    SEABORN_AVAILABLE = False
+    print("Warning: seaborn not available, using matplotlib defaults")
+
+# Try to import plotly, but make it optional
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    print("Warning: plotly not available")
+
 from typing import Dict, List, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
 
 # Set style for better plots
-try:
-    plt.style.use('seaborn-v0_8')
-except:
+if SEABORN_AVAILABLE:
+    try:
+        plt.style.use('seaborn-v0_8')
+        sns.set_palette("husl")
+    except:
+        plt.style.use('default')
+else:
     plt.style.use('default')
-sns.set_palette("husl")
 
 class DataScribeEDA:
     """
