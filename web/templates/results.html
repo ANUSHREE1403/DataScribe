@@ -4,184 +4,722 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DataScribe - Analysis Results</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
+        * {
             margin: 0;
             padding: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            box-sizing: border-box;
         }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #ffffff;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+
+        /* Animated Background */
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            opacity: 0.03;
+        }
+
+        .floating-elements {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .floating-element {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            opacity: 0.1;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .floating-element:nth-child(1) {
+            width: 80px;
+            height: 80px;
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .floating-element:nth-child(2) {
+            width: 60px;
+            height: 60px;
+            top: 60%;
+            right: 15%;
+            animation-delay: 7s;
+        }
+
+        .floating-element:nth-child(3) {
+            width: 40px;
+            height: 40px;
+            bottom: 30%;
+            left: 20%;
+            animation-delay: 14s;
+        }
+
+        @keyframes float {
+            0%, 100% { 
+                transform: translateY(0px) rotate(0deg) scale(1);
+                opacity: 0.1;
+            }
+            33% { 
+                transform: translateY(-30px) rotate(120deg) scale(1.1);
+                opacity: 0.2;
+            }
+            66% { 
+                transform: translateY(30px) rotate(240deg) scale(0.9);
+                opacity: 0.15;
+            }
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 2px 30px rgba(0, 0, 0, 0.1);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .header.scrolled {
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 4px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: transform 0.3s ease;
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        .logo-icon {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .logo-icon:hover {
+            transform: rotate(5deg) scale(1.1);
+            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+        }
+
+        .brand-title {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #2c3e50;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            color: #3498db;
+            padding: 0.8rem 1.8rem;
+            text-decoration: none;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(52, 152, 219, 0.2);
+            font-weight: 600;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .back-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(52, 152, 219, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .back-btn:hover::before {
+            left: 100%;
+        }
+
+        .back-btn:hover {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(52, 152, 219, 0.3);
+            border-color: transparent;
+        }
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 2rem;
         }
-        .header {
+
+        .results-header {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 5rem 3rem;
             text-align: center;
-            color: white;
-            margin-bottom: 2rem;
-        }
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        .back-btn {
-            display: inline-block;
-            background: rgba(255,255,255,0.2);
-            color: white;
-            padding: 0.5rem 1rem;
-            text-decoration: none;
-            border-radius: 5px;
-            margin-bottom: 1rem;
-            transition: background 0.3s ease;
-        }
-        .back-btn:hover {
-            background: rgba(255,255,255,0.3);
-        }
-        .results-container {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border-radius: 24px;
+            margin-bottom: 4rem;
+            box-shadow: 0 20px 50px rgba(52, 152, 219, 0.3);
+            position: relative;
             overflow: hidden;
         }
-        .results-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem;
-            text-align: center;
+
+        .results-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="0.5" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
         }
+
         .results-header h2 {
-            margin: 0;
-            font-size: 2rem;
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 2;
+            animation: titleGlow 3s ease-in-out infinite alternate;
         }
-        .results-content {
-            padding: 2rem;
+
+        @keyframes titleGlow {
+            0% { filter: brightness(1); }
+            100% { filter: brightness(1.1); }
         }
+
+        .results-header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            position: relative;
+            z-index: 2;
+        }
+
         .section {
-            margin-bottom: 2rem;
-            padding: 1.5rem;
-            border: 1px solid #e1e5e9;
-            border-radius: 10px;
-            background: #f8f9fa;
+            margin-bottom: 4rem;
+            padding: 3rem;
+            border: 1px solid rgba(52, 152, 219, 0.1);
+            border-radius: 20px;
+            background: #ffffff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
         }
+
+        .section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .section:hover::before {
+            transform: scaleX(1);
+        }
+
+        .section:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(52, 152, 219, 0.15);
+            border-color: rgba(52, 152, 219, 0.3);
+        }
+
         .section h3 {
-            color: #333;
+            color: #2c3e50;
             margin-top: 0;
-            border-bottom: 2px solid #667eea;
-            padding-bottom: 0.5rem;
+            margin-bottom: 2rem;
+            font-size: 1.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: color 0.3s ease;
         }
+
+        .section:hover h3 {
+            color: #3498db;
+        }
+
+        .section h3::before {
+            content: '';
+            width: 5px;
+            height: 30px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            border-radius: 3px;
+            box-shadow: 0 2px 10px rgba(52, 152, 219, 0.3);
+        }
+
         .metric-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin: 1rem 0;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
         }
+
         .metric-card {
-            background: white;
-            padding: 1rem;
-            border-radius: 8px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 2rem;
+            border-radius: 16px;
             text-align: center;
-            border: 1px solid #e1e5e9;
+            border: 2px solid rgba(52, 152, 219, 0.1);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
         }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .metric-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .metric-card:hover {
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: 0 15px 35px rgba(52, 152, 219, 0.2);
+            border-color: rgba(52, 152, 219, 0.3);
+            background: linear-gradient(135deg, #ffffff, #f8f9fa);
+        }
+
         .metric-value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #667eea;
-            margin-bottom: 0.5rem;
+            font-size: 3rem;
+            font-weight: 800;
+            color: #3498db;
+            margin-bottom: 0.8rem;
+            text-shadow: 0 2px 10px rgba(52, 152, 219, 0.2);
+            transition: all 0.3s ease;
         }
+
+        .metric-card:hover .metric-value {
+            transform: scale(1.1);
+            color: #2980b9;
+        }
+
         .metric-label {
-            color: #666;
-            font-size: 0.9rem;
+            color: #7f8c8d;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: color 0.3s ease;
         }
+
+        .metric-card:hover .metric-label {
+            color: #2c3e50;
+        }
+
         .visualization {
             text-align: center;
-            margin: 1rem 0;
+            margin: 3rem 0;
+            padding: 2rem;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 16px;
+            border: 2px solid rgba(52, 152, 219, 0.1);
+            transition: all 0.4s ease;
         }
+
+        .visualization:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            border-color: rgba(52, 152, 219, 0.3);
+        }
+
+        .visualization h4 {
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            font-size: 1.4rem;
+            font-weight: 700;
+            transition: color 0.3s ease;
+        }
+
+        .visualization:hover h4 {
+            color: #3498db;
+        }
+
         .visualization img {
             max-width: 100%;
             height: auto;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            transition: all 0.4s ease;
         }
-        .download-section {
-            background: #e3f2fd;
-            padding: 1.5rem;
-            border-radius: 10px;
-            text-align: center;
-            margin-top: 2rem;
+
+        .visualization img:hover {
+            transform: scale(1.03);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
         }
-        .download-btn {
-            display: inline-block;
-            background: #2196f3;
-            color: white;
-            padding: 1rem 2rem;
-            text-decoration: none;
-            border-radius: 8px;
-            margin: 0.5rem;
-            font-weight: 600;
-            transition: background 0.3s ease;
-        }
-        .download-btn:hover {
-            background: #1976d2;
-        }
+
         .quality-score {
             text-align: center;
-            margin: 2rem 0;
+            margin: 3rem 0;
+            padding: 3rem;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 20px;
+            border: 2px solid rgba(52, 152, 219, 0.1);
+            transition: all 0.4s ease;
         }
+
+        .quality-score:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(52, 152, 219, 0.2);
+            border-color: rgba(52, 152, 219, 0.3);
+        }
+
         .score-circle {
-            width: 120px;
-            height: 120px;
+            width: 180px;
+            height: 180px;
             border-radius: 50%;
-            background: conic-gradient(#4caf50 0deg, #4caf50 0deg, #e0e0e0 0deg);
+            background: conic-gradient(#3498db 0deg, #3498db 0deg, #e9ecef 0deg);
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 1rem;
-            font-size: 2rem;
-            font-weight: bold;
-            color: #333;
+            margin: 0 auto 1.5rem;
+            font-size: 3rem;
+            font-weight: 800;
+            color: #2c3e50;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(52, 152, 219, 0.3);
+            transition: all 0.4s ease;
         }
+
+        .score-circle:hover {
+            transform: scale(1.05) rotate(5deg);
+            box-shadow: 0 15px 40px rgba(52, 152, 219, 0.4);
+        }
+
+        .score-circle::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            bottom: 15px;
+            background: #ffffff;
+            border-radius: 50%;
+            z-index: -1;
+            box-shadow: inset 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
         .insights {
-            background: #fff3e0;
-            padding: 1.5rem;
-            border-radius: 10px;
-            border-left: 4px solid #ff9800;
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+            padding: 3rem;
+            border-radius: 20px;
+            border-left: 5px solid #ffc107;
+            border: 2px solid rgba(255, 193, 7, 0.3);
+            transition: all 0.4s ease;
         }
+
+        .insights:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(255, 193, 7, 0.2);
+            border-color: rgba(255, 193, 7, 0.5);
+        }
+
         .insights h4 {
-            color: #e65100;
+            color: #856404;
             margin-top: 0;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
+
         .insights ul {
             margin: 0;
-            padding-left: 1.5rem;
+            padding-left: 0;
+            list-style: none;
         }
+
         .insights li {
-            margin-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: rgba(255, 193, 7, 0.1);
+            border-radius: 10px;
+            border-left: 4px solid #ffc107;
+            color: #2c3e50;
+            transition: all 0.3s ease;
+            position: relative;
+            padding-left: 2rem;
+        }
+
+        .insights li::before {
+            content: '';
+            position: absolute;
+            left: 0.8rem;
+            top: 1rem;
+            width: 8px;
+            height: 8px;
+            background: #ffc107;
+            border-radius: 50%;
+        }
+
+        .insights li:hover {
+            transform: translateX(5px);
+            background: rgba(255, 193, 7, 0.2);
+            box-shadow: 0 4px 15px rgba(255, 193, 7, 0.2);
+        }
+
+        .download-section {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            padding: 3rem;
+            border-radius: 20px;
+            text-align: center;
+            margin-top: 3rem;
+            border: 2px solid rgba(52, 152, 219, 0.1);
+            transition: all 0.4s ease;
+        }
+
+        .download-section:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            border-color: rgba(52, 152, 219, 0.3);
+        }
+
+        .download-section h3 {
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+            font-weight: 700;
+            transition: color 0.3s ease;
+        }
+
+        .download-section:hover h3 {
+            color: #3498db;
+        }
+
+        .download-section p {
+            color: #7f8c8d;
+            margin-bottom: 2.5rem;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #ffffff;
+            color: #2c3e50;
+            padding: 1.2rem 2rem;
+            text-decoration: none;
+            border-radius: 12px;
+            margin: 0.8rem;
+            font-weight: 700;
+            transition: all 0.4s ease;
+            border: 2px solid #e9ecef;
+            font-size: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .download-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .download-btn:hover::before {
+            left: 100%;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .download-btn.pdf { border-color: #e74c3c; color: #e74c3c; }
+        .download-btn.excel { border-color: #27ae60; color: #27ae60; }
+        .download-btn.html { border-color: #3498db; color: #3498db; }
+        .download-btn.r { border-color: #9b59b6; color: #9b59b6; }
+        .download-btn.dataset { border-color: #f39c12; color: #f39c12; }
+        .download-btn.new { border-color: #95a5a6; color: #95a5a6; }
+
+        .download-btn.pdf:hover { background: #e74c3c; color: white; }
+        .download-btn.excel:hover { background: #27ae60; color: white; }
+        .download-btn.html:hover { background: #3498db; color: white; }
+        .download-btn.r:hover { background: #9b59b6; color: white; }
+        .download-btn.dataset:hover { background: #f39c12; color: white; }
+        .download-btn.new:hover { background: #95a5a6; color: white; }
+
+        .download-descriptions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+            text-align: left;
+        }
+
+        .download-desc {
+            background: #ffffff;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 2px solid rgba(52, 152, 219, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .download-desc:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            border-color: rgba(52, 152, 219, 0.3);
+        }
+
+        .download-desc strong {
+            color: #3498db;
+            display: block;
+            margin-bottom: 0.8rem;
+            font-size: 1.1rem;
+        }
+
+        .download-desc small {
+            color: #7f8c8d;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        /* Scroll animations */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .results-header {
+                padding: 3rem 1.5rem;
+            }
+            
+            .results-header h2 {
+                font-size: 2.2rem;
+            }
+            
+            .metric-grid {
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 1.5rem;
+            }
+            
+            .download-btn {
+                display: block;
+                margin: 0.8rem 0;
+            }
+            
+            .section {
+                padding: 2rem;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Animated Background -->
+    <div class="animated-bg"></div>
+    <div class="floating-elements">
+        <div class="floating-element"></div>
+        <div class="floating-element"></div>
+        <div class="floating-element"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="brand-title">DataScribe</div>
+            </div>
+            <a href="/" class="back-btn">
+                <i class="fas fa-arrow-left"></i>
+                Back to Upload
+            </a>
+        </div>
+    </header>
+
     <div class="container">
-        <div class="header">
-            <h1>🚀 DataScribe</h1>
-            <p>Analysis Results</p>
+        <div class="results-header">
+            <h2>Analysis Complete!</h2>
+            <p>Your dataset has been analyzed successfully</p>
         </div>
         
-        <a href="/" class="back-btn">← Back to Upload</a>
-        
-        <div class="results-container">
-            <div class="results-header">
-                <h2>📊 Analysis Complete!</h2>
-                <p>Your dataset has been analyzed successfully</p>
-            </div>
-            
-            <div class="results-content">
                 <!-- Dataset Overview -->
-                <div class="section">
-                    <h3>📋 Dataset Overview</h3>
+        <div class="section fade-in">
+            <h3><i class="fas fa-table"></i> Dataset Overview</h3>
                     <div class="metric-grid">
                         <div class="metric-card">
                             <div class="metric-value">{{ analysis_results.overview.shape[0] if analysis_results.overview and analysis_results.overview.shape else 'N/A' }}</div>
@@ -211,8 +749,8 @@
                 </div>
                 
                 <!-- Data Quality -->
-                <div class="section">
-                    <h3>🔍 Data Quality Assessment</h3>
+        <div class="section fade-in">
+            <h3><i class="fas fa-shield-alt"></i> Data Quality Assessment</h3>
                     <div class="quality-score">
                         <div class="score-circle">
                             {{ analysis_results.data_quality.data_quality_score if analysis_results.data_quality and analysis_results.data_quality.data_quality_score else 'N/A' }}%
@@ -238,8 +776,8 @@
                 
                 <!-- Visualizations -->
                 {% if job.visualization_urls %}
-                <div class="section">
-                    <h3>📈 Data Visualizations</h3>
+        <div class="section fade-in">
+            <h3><i class="fas fa-chart-bar"></i> Data Visualizations</h3>
                     {% for plot_type, plot_url in job.visualization_urls.items() %}
                     <div class="visualization">
                         <h4>{{ plot_type|title }}</h4>
@@ -251,10 +789,10 @@
                 
                 <!-- AI Insights -->
                 {% if analysis_results.insights %}
-                <div class="section">
-                    <h3>🤖 AI Insights</h3>
+        <div class="section fade-in">
+            <h3><i class="fas fa-brain"></i> AI Insights</h3>
                     <div class="insights">
-                        <h4>Key Findings:</h4>
+                <h4><i class="fas fa-lightbulb"></i> Key Findings:</h4>
                         <ul>
                             {% for insight in analysis_results.insights.data_quality_insights %}
                             <li>{{ insight }}</li>
@@ -270,33 +808,342 @@
                 </div>
                 {% endif %}
                 
-                <!-- Download Section -->
-                <div class="download-section">
-                    <h3>📥 Download Results</h3>
-                    <p>Get your analysis results in various formats. Choose the format that best suits your needs:</p>
-                    <div style="margin-bottom: 1rem; text-align: center; color: #666;">
-                        <small>
-                            📄 <strong>PDF Report:</strong> Professional analysis report with visualizations for presentations and printing<br>
-                            📊 <strong>Excel Report:</strong> Structured data with multiple sheets for further analysis<br>
-                            🌐 <strong>HTML Report:</strong> Web-friendly format for sharing and viewing online<br>
-
-                            📈 <strong>R Code:</strong> R-based analysis code for statistical analysis<br>
-                            📁 <strong>Original Dataset:</strong> Your cleaned and processed data file
-                        </small>
+        <!-- ML Summary -->
+        {% if job.ml and job.ml.enabled %}
+        <div class="section fade-in">
+            <h3><i class="fas fa-robot"></i> Machine Learning Model Training Results</h3>
+            {% if job.ml.error %}
+                <div style="background: linear-gradient(135deg, #ffe6e6, #ffcccc); padding: 2rem; border-radius: 16px; border: 2px solid #e74c3c;">
+                    <h4 style="color: #c0392b; margin-top: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-exclamation-triangle"></i> Training Error
+                    </h4>
+                    <p style="color: #e74c3c; font-weight: 600; margin: 0;">{{ job.ml.error }}</p>
+                </div>
+            {% else %}
+                <!-- Model Overview -->
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" style="font-size: 1.5rem;">{{ job.ml.model_name }}</div>
+                        <div class="metric-label">Selected Model</div>
                     </div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center;">
-                        <a href="/download/{{ job.job_id }}/report/pdf" class="download-btn" style="background: #d32f2f;">📄 PDF Report</a>
-                        <a href="/download/{{ job.job_id }}/report/excel" class="download-btn" style="background: #388e3c;">📊 Excel Report</a>
-                        <a href="/download/{{ job.job_id }}/report/html" class="download-btn" style="background: #1976d2;">🌐 HTML Report</a>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ job.ml.target }}</div>
+                        <div class="metric-label">Target Variable</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ '%.2f'|format(job.ml.accuracy * 100) if job.ml.accuracy else 'N/A' }}%</div>
+                        <div class="metric-label">Accuracy</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ '%.2f'|format(job.ml.precision * 100) if job.ml.precision else 'N/A' }}%</div>
+                        <div class="metric-label">Precision</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ '%.2f'|format(job.ml.recall * 100) if job.ml.recall else 'N/A' }}%</div>
+                        <div class="metric-label">Recall</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ '%.2f'|format(job.ml.f1 * 100) if job.ml.f1 else 'N/A' }}%</div>
+                        <div class="metric-label">F1 Score</div>
+                    </div>
+                    {% if job.ml.roc_auc %}
+                    <div class="metric-card">
+                        <div class="metric-value">{{ '%.2f'|format(job.ml.roc_auc * 100) }}%</div>
+                        <div class="metric-label">ROC-AUC</div>
+                    </div>
+                    {% endif %}
+                </div>
 
-                        <a href="/download/{{ job.job_id }}/code/r" class="download-btn" style="background: #0277bd;">📈 R Code</a>
-                        <a href="/download/{{ job.job_id }}/dataset" class="download-btn" style="background: #7b1fa2;">📁 Original Dataset</a>
+                <!-- Cross-Validation Results -->
+                {% if job.ml.cv_mean %}
+                <div style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); padding: 2rem; border-radius: 16px; margin: 2rem 0; border: 2px solid rgba(46, 204, 113, 0.3);">
+                    <h4 style="color: #27ae60; margin-top: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-check-circle"></i> Cross-Validation (5-Fold)
+                    </h4>
+                    <p style="font-size: 1.2rem; color: #2c3e50; margin: 0;">
+                        <strong>{{ '%.2f'|format(job.ml.cv_mean * 100) }}% ± {{ '%.2f'|format(job.ml.cv_std * 100) }}%</strong>
+                    </p>
+                    <small style="color: #7f8c8d;">Mean accuracy across 5 stratified folds with standard deviation</small>
+                </div>
+                {% endif %}
 
-                        <a href="/" class="download-btn" style="background: #607d8b;">🔄 New Analysis</a>
+                <!-- Confusion Matrix -->
+                {% if job.ml.confusion_matrix_url %}
+                <div class="visualization">
+                    <h4>Confusion Matrix</h4>
+                    <img src="{{ job.ml.confusion_matrix_url }}" alt="Confusion Matrix" style="max-width: 600px;">
+                </div>
+                {% endif %}
+
+                <!-- Dataset Split & Class Balance -->
+                <div style="background: linear-gradient(135deg, #f8f9fa, #e9ecef); padding: 2.5rem; border-radius: 16px; margin: 2rem 0; border: 2px solid rgba(52, 152, 219, 0.2);">
+                    <h4 style="color: #2c3e50; margin-top: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-database"></i> Dataset Split & Class Distribution
+                    </h4>
+                    <div class="metric-grid" style="margin-top: 1.5rem;">
+                        <div class="metric-card">
+                            <div class="metric-value">{{ job.ml.train_size }}</div>
+                            <div class="metric-label">Training Samples</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{{ job.ml.test_size }}</div>
+                            <div class="metric-label">Test Samples</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">80/20</div>
+                            <div class="metric-label">Split Ratio</div>
+                        </div>
+                    </div>
+                    {% if job.ml.class_balance %}
+                    <div style="margin-top: 1.5rem;">
+                        <strong style="color: #3498db; display: block; margin-bottom: 0.8rem;">Class Distribution:</strong>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                            {% for class_name, count in job.ml.class_balance.items() %}
+                            <div style="background: #ffffff; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: #3498db;">{{ count }}</div>
+                                <div style="color: #7f8c8d; font-size: 0.9rem;">Class: {{ class_name }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Preprocessing Summary -->
+                {% if job.ml.preprocessing %}
+                <div style="background: linear-gradient(135deg, #fff9e6, #fff3cd); padding: 2.5rem; border-radius: 16px; margin: 2rem 0; border: 2px solid rgba(255, 193, 7, 0.3);">
+                    <h4 style="color: #856404; margin-top: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-tools"></i> Data Preprocessing
+                    </h4>
+                    <div class="metric-grid" style="margin-top: 1.5rem;">
+                        {% if job.ml.preprocessing.numeric_features is defined %}
+                        <div class="metric-card">
+                            <div class="metric-value">{{ job.ml.preprocessing.numeric_features }}</div>
+                            <div class="metric-label">Numeric Features</div>
+                        </div>
+                        {% endif %}
+                        {% if job.ml.preprocessing.categorical_features is defined %}
+                        <div class="metric-card">
+                            <div class="metric-value">{{ job.ml.preprocessing.categorical_features }}</div>
+                            <div class="metric-label">Categorical Features</div>
+                        </div>
+                        {% endif %}
+                        <div class="metric-card">
+                            <div class="metric-value">{{ job.ml.preprocessing.final_feature_count }}</div>
+                            <div class="metric-label">Final Features (after encoding)</div>
+                        </div>
+                    </div>
+                    <p style="color: #7f8c8d; margin-top: 1rem; margin-bottom: 0; font-size: 0.95rem;">
+                        <i class="fas fa-info-circle"></i> 
+                        Missing values imputed with median (numeric) and 'Missing' label (categorical). Categorical variables one-hot encoded.
+                    </p>
+                </div>
+                {% endif %}
+
+                <!-- Top Features / Coefficients -->
+                {% if job.ml.top_features %}
+                <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); padding: 2.5rem; border-radius: 16px; margin: 2rem 0; border: 2px solid rgba(52, 152, 219, 0.3);">
+                    <h4 style="color: #1976d2; margin-top: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-star"></i> Top Features / Importances
+                    </h4>
+                    <div style="margin-top: 1.5rem;">
+                        {% for feat_name, feat_val in job.ml.top_features %}
+                        <div style="background: #ffffff; padding: 1rem; border-radius: 10px; margin-bottom: 0.8rem; border: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease;">
+                            <span style="color: #2c3e50; font-weight: 600;">{{ feat_name }}</span>
+                            <span style="color: #3498db; font-weight: 700;">{{ '%.4f'|format(feat_val) }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <p style="color: #7f8c8d; margin-top: 1rem; margin-bottom: 0; font-size: 0.95rem;">
+                        <i class="fas fa-info-circle"></i> 
+                        {% if 'Random Forest' in job.ml.model_name or 'XGBoost' in job.ml.model_name or 'LightGBM' in job.ml.model_name %}
+                        Feature importance scores from tree-based model.
+                        {% else %}
+                        Absolute coefficient values from linear model.
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
+
+                <!-- Model Hyperparameters -->
+                {% if job.ml.params %}
+                <div style="background: linear-gradient(135deg, #f3e5f5, #e1bee7); padding: 2.5rem; border-radius: 16px; margin: 2rem 0; border: 2px solid rgba(155, 89, 182, 0.3);">
+                    <h4 style="color: #7b1fa2; margin-top: 0; display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-cog"></i> Model Hyperparameters
+                    </h4>
+                    <div style="margin-top: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                        {% for param_name, param_val in job.ml.params.items() %}
+                        {% if param_name in ['n_estimators', 'max_iter', 'random_state', 'kernel', 'n_neighbors', 'C', 'gamma', 'max_depth', 'learning_rate', 'n_jobs', 'num_leaves'] %}
+                        <div style="background: #ffffff; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef;">
+                            <div style="color: #7f8c8d; font-size: 0.85rem; margin-bottom: 0.3rem;">{{ param_name }}</div>
+                            <div style="color: #2c3e50; font-weight: 600;">{{ param_val }}</div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
                     </div>
                 </div>
+                {% endif %}
+
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Download Section -->
+        <div class="download-section fade-in">
+            <h3><i class="fas fa-download"></i> Download Results</h3>
+            <p>Get your analysis results in various formats. Choose the format that best suits your needs:</p>
+            
+            <div class="download-descriptions">
+                <div class="download-desc">
+                    <strong>PDF Report</strong>
+                    <small>Professional analysis report with visualizations for presentations and printing</small>
+                </div>
+                <div class="download-desc">
+                    <strong>Excel Report</strong>
+                    <small>Structured data with multiple sheets for further analysis</small>
+                </div>
+                <div class="download-desc">
+                    <strong>HTML Report</strong>
+                    <small>Web-friendly format for sharing and viewing online</small>
+                </div>
+                <div class="download-desc">
+                    <strong>R Code</strong>
+                    <small>R-based analysis code for statistical analysis</small>
+                </div>
+                <div class="download-desc">
+                    <strong>Original Dataset</strong>
+                    <small>Your cleaned and processed data file</small>
+                </div>
+            </div>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center;">
+                <a href="/download/{{ job.job_id }}/report/pdf" class="download-btn pdf">
+                    <i class="fas fa-file-pdf"></i>
+                    PDF Report
+                </a>
+                <a href="/download/{{ job.job_id }}/report/excel" class="download-btn excel">
+                    <i class="fas fa-file-excel"></i>
+                    Excel Report
+                </a>
+                <a href="/download/{{ job.job_id }}/report/html" class="download-btn html">
+                    <i class="fas fa-file-code"></i>
+                    HTML Report
+                </a>
+                <a href="/download/{{ job.job_id }}/code/r" class="download-btn r">
+                    <i class="fab fa-r-project"></i>
+                    R Code
+                </a>
+                <a href="/download/{{ job.job_id }}/dataset" class="download-btn dataset">
+                    <i class="fas fa-database"></i>
+                    Original Dataset
+                </a>
+                <a href="/" class="download-btn new">
+                    <i class="fas fa-plus"></i>
+                    New Analysis
+                </a>
             </div>
         </div>
     </div>
+
+    <script>
+        // Header scroll effect
+        window.addEventListener('scroll', function() {
+            const header = document.getElementById('header');
+            if (window.scrollY > 100) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        });
+
+        // Scroll animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Add hover effects to cards
+        document.querySelectorAll('.metric-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-6px) scale(1.02)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+
+        // Add click effects to buttons
+        document.querySelectorAll('.download-btn').forEach(button => {
+            button.addEventListener('click', function(e) {
+                // Create ripple effect
+                const ripple = document.createElement('span');
+                const rect = this.getBoundingClientRect();
+                const size = Math.max(rect.width, rect.height);
+                const x = e.clientX - rect.left - size / 2;
+                const y = e.clientY - rect.top - size / 2;
+                
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = x + 'px';
+                ripple.style.top = y + 'px';
+                ripple.classList.add('ripple');
+                
+                this.appendChild(ripple);
+                
+                setTimeout(() => {
+                    ripple.remove();
+                }, 600);
+            });
+        });
+
+        // Add CSS for ripple effect
+        const style = document.createElement('style');
+        style.textContent = `
+            .ripple {
+                position: absolute;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.3);
+                transform: scale(0);
+                animation: ripple-animation 0.6s linear;
+                pointer-events: none;
+            }
+            
+            @keyframes ripple-animation {
+                to {
+                    transform: scale(4);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+
+    <!-- Footer -->
+    <footer style="background: linear-gradient(135deg, #2c3e50, #34495e); color: #ecf0f1; padding: 4rem 0; text-align: center; margin-top: 4rem;">
+        <div style="max-width: 1200px; margin: 0 auto; padding: 0 2rem;">
+            <div style="margin-bottom: 1.5rem;">
+                <h3 style="color: #ecf0f1; font-size: 1.3rem; margin-bottom: 0.8rem; font-weight: 700;">Contact Help & Support</h3>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 1.1rem;">
+                    <i class="fas fa-envelope" style="color: #3498db;"></i>
+                    <a href="mailto:workanushree14@gmail.com" style="color: #ecf0f1; text-decoration: none; transition: color 0.3s ease;">
+                        workanushree14@gmail.com
+                    </a>
+                </div>
+            </div>
+            <p style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(236, 240, 241, 0.2); color: #bdc3c7; font-size: 1rem; font-weight: 500;">&copy; 2024 DataScribe. Democratizing Data Analysis with Human-Readable Insights.</p>
+        </div>
+    </footer>
 </body>
 </html> 

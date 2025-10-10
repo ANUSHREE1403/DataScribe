@@ -90,7 +90,10 @@ async def home(request: Request):
 async def analyze_dataset(
     file: UploadFile = File(...),
     target_column: Optional[str] = Form(None),
-    include_plots: bool = Form(True)
+    include_plots: bool = Form(True),
+    train_model: bool = Form(False),
+    model_choice: str = Form("auto"),
+    include_python_code: bool = Form(False)
 ):
     """Analyze uploaded dataset"""
     
@@ -178,10 +181,224 @@ async def analyze_dataset(
             "visualization_urls": plot_files,  # Store URLs for web display
             "target_column": target_column,
             "include_plots": include_plots,
+            "include_python_code": include_python_code,
             "filename": original_filename,
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
+            "ml": None
         }
         
+        # Optional: Train ML model
+        if train_model and target_column:
+            try:
+                from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+                from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score, confusion_matrix
+                from sklearn.preprocessing import StandardScaler
+                from sklearn.linear_model import LogisticRegression
+                from sklearn.ensemble import RandomForestClassifier
+                import numpy as np
+                import pandas as pd
+                import matplotlib.pyplot as plt
+                try:
+                    import seaborn as sns  # optional for nicer confusion matrix
+                except Exception:
+                    sns = None
+
+                print(f"Starting ML training for job {job_id} with choice: {model_choice}")
+
+                # Prepare data (simple baseline): one-hot encode categoricals, drop rows with missing target
+                df_ml = pd.read_csv(dataset_path)
+                df_ml = df_ml.dropna(subset=[target_column])
+                y = df_ml[target_column]
+                X = df_ml.drop(columns=[target_column])
+                # Handle missing values: numeric -> median, categorical -> 'Missing'
+                num_cols = X.select_dtypes(include=[np.number]).columns.tolist()
+                cat_cols = [c for c in X.columns if c not in num_cols]
+                if len(num_cols) > 0:
+                    X[num_cols] = X[num_cols].fillna(X[num_cols].median())
+                for c in cat_cols:
+                    X[c] = X[c].fillna('Missing')
+                # One-hot encode categoricals
+                X = pd.get_dummies(X, drop_first=True)
+
+                # Only proceed if we have valid numeric features
+                if X.shape[1] > 0:
+                    stratify_vec = y if len(y.unique()) <= 20 else None
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y, test_size=0.2, random_state=42, stratify=stratify_vec
+                    )
+
+                    def train_logreg():
+                        scaler = StandardScaler(with_mean=False)
+                        Xtr = scaler.fit_transform(X_train)
+                        Xte = scaler.transform(X_test)
+                        clf = LogisticRegression(max_iter=1000, n_jobs=None)
+                        clf.fit(Xtr, y_train)
+                        pred = clf.predict(Xte)
+                        acc = accuracy_score(y_test, pred)
+                        return {"name": "Logistic Regression", "accuracy": float(acc)}
+
+                    def train_rf():
+                        clf = RandomForestClassifier(n_estimators=200, random_state=42)
+                        clf.fit(X_train, y_train)
+                        pred = clf.predict(X_test)
+                        acc = accuracy_score(y_test, pred)
+                        return {"name": "Random Forest", "accuracy": float(acc)}
+
+                    if model_choice == "logreg":
+                        result = train_logreg()
+                        chosen = result
+                        chosen_name = "Logistic Regression"
+                        # retrain model instance for downstream metrics
+                        scaler = StandardScaler(with_mean=False)
+                        Xtr = scaler.fit_transform(X_train)
+                        Xte = scaler.transform(X_test)
+                        chosen_model = LogisticRegression(max_iter=1000)
+                        chosen_model.fit(Xtr, y_train)
+                        y_pred = chosen_model.predict(Xte)
+                        y_proba = None
+                        try:
+                            y_proba = chosen_model.predict_proba(Xte)[:, 1]
+                        except Exception:
+                            y_proba = None
+                    elif model_choice == "rf":
+                        result = train_rf()
+                        chosen = result
+                        chosen_name = "Random Forest"
+                        chosen_model = RandomForestClassifier(n_estimators=200, random_state=42)
+                        chosen_model.fit(X_train, y_train)
+                        y_pred = chosen_model.predict(X_test)
+                        y_proba = None
+                        try:
+                            y_proba = chosen_model.predict_proba(X_test)[:, 1]
+                        except Exception:
+                            y_proba = None
+                    else:
+                        r1 = train_logreg()
+                        r2 = train_rf()
+                        chosen = r1 if r1["accuracy"] >= r2["accuracy"] else r2
+                        chosen_name = chosen["name"]
+                        if chosen_name == "Logistic Regression":
+                            scaler = StandardScaler(with_mean=False)
+                            Xtr = scaler.fit_transform(X_train)
+                            Xte = scaler.transform(X_test)
+                            chosen_model = LogisticRegression(max_iter=1000)
+                            chosen_model.fit(Xtr, y_train)
+                            y_pred = chosen_model.predict(Xte)
+                            try:
+                                y_proba = chosen_model.predict_proba(Xte)[:, 1]
+                            except Exception:
+                                y_proba = None
+                        else:
+                            chosen_model = RandomForestClassifier(n_estimators=200, random_state=42)
+                            chosen_model.fit(X_train, y_train)
+                            y_pred = chosen_model.predict(X_test)
+                            try:
+                                y_proba = chosen_model.predict_proba(X_test)[:, 1]
+                            except Exception:
+                                y_proba = None
+
+                    # Detailed metrics
+                    avg = 'binary' if len(pd.Series(y_test).unique()) == 2 else 'macro'
+                    prec, rec, f1, _ = precision_recall_fscore_support(y_test, y_pred, average=avg, zero_division=0)
+                    acc = accuracy_score(y_test, y_pred)
+                    roc = None
+                    try:
+                        if y_proba is not None and avg == 'binary':
+                            roc = roc_auc_score(y_test, y_proba)
+                    except Exception:
+                        roc = None
+
+                    # Cross-validation on training set
+                    cv_mean, cv_std = None, None
+                    try:
+                        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42) if stratify_vec is not None else 5
+                        scores = cross_val_score(chosen_model, X_train if chosen_name == 'Random Forest' else Xtr, y_train, cv=skf, scoring='accuracy')
+                        cv_mean, cv_std = float(np.mean(scores)), float(np.std(scores))
+                    except Exception:
+                        pass
+
+                    # Confusion matrix plot
+                    cm = confusion_matrix(y_test, y_pred)
+                    import os as _os
+                    _os.makedirs('static', exist_ok=True)
+                    cm_path = _os.path.join('static', f'{job_id}_confusion_matrix.png')
+                    plt.figure(figsize=(5,4))
+                    if sns is not None:
+                        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+                    else:
+                        plt.imshow(cm, cmap='Blues')
+                        for (i,j), val in np.ndenumerate(cm):
+                            plt.text(j, i, int(val), ha='center', va='center')
+                    plt.title('Confusion Matrix')
+                    plt.xlabel('Predicted')
+                    plt.ylabel('Actual')
+                    plt.tight_layout()
+                    plt.savefig(cm_path)
+                    plt.close()
+
+                    # Split and preprocessing summary
+                    class_balance = pd.Series(y).value_counts().to_dict()
+                    prep_summary = {
+                        "numeric_features": len(num_cols),
+                        "categorical_features": len(cat_cols),
+                        "final_feature_count": int(X.shape[1])
+                    }
+
+                    # Feature importances / coefficients (top 10)
+                    top_features = None
+                    try:
+                        if chosen_name == 'Random Forest' and hasattr(chosen_model, 'feature_importances_'):
+                            importances = chosen_model.feature_importances_
+                            idx = np.argsort(importances)[::-1][:10]
+                            cols = list(X.columns)
+                            top_features = [(cols[i], float(importances[i])) for i in idx]
+                        elif chosen_name == 'Logistic Regression' and hasattr(chosen_model, 'coef_'):
+                            coefs = np.abs(chosen_model.coef_[0]) if len(chosen_model.coef_.shape) > 1 else np.abs(chosen_model.coef_)
+                            idx = np.argsort(coefs)[::-1][:10]
+                            cols = list(X.columns)
+                            top_features = [(cols[i], float(coefs[i])) for i in idx]
+                    except Exception:
+                        top_features = None
+
+                    jobs[job_id]["ml"] = {
+                        "enabled": True,
+                        "target": target_column,
+                        "choice": model_choice,
+                        "model_name": chosen_name,
+                        "accuracy": float(acc),
+                        "precision": float(prec),
+                        "recall": float(rec),
+                        "f1": float(f1),
+                        "roc_auc": float(roc) if roc is not None else None,
+                        "cv_mean": cv_mean,
+                        "cv_std": cv_std,
+                        "train_size": int(len(y_train)),
+                        "test_size": int(len(y_test)),
+                        "class_balance": class_balance,
+                        "preprocessing": prep_summary,
+                        "confusion_matrix_url": f"/static/{job_id}_confusion_matrix.png" if _os.path.exists(cm_path) else None,
+                        "top_features": top_features,
+                        "params": (chosen_model.get_params() if hasattr(chosen_model, 'get_params') else None)
+                    }
+                    print(f"ML training done: {jobs[job_id]['ml']}")
+                else:
+                    jobs[job_id]["ml"] = {
+                        "enabled": True,
+                        "error": "No usable features after preprocessing"
+                    }
+            except Exception as ml_e:
+                print(f"ML training error: {ml_e}")
+                jobs[job_id]["ml"] = {
+                    "enabled": True,
+                    "error": str(ml_e)
+                }
+        elif train_model and not target_column:
+            # User requested ML but didn't provide a target column
+            jobs[job_id]["ml"] = {
+                "enabled": True,
+                "error": "Target column not provided. Please specify a target for supervised training."
+            }
+
         # Debug: Print what we stored
         print(f"Job {job_id} stored with:")
         print(f"  - Visualizations: {visualization_paths}")
@@ -212,7 +429,7 @@ def generate_python_code(job: dict, job_id: str) -> str:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         filename = job.get("filename", "Unknown")
         
-        code_content = f'''# DataScribe Analysis Code
+        code_content = '''# DataScribe Analysis Code
 # Generated on: {current_time}
 # Dataset: {filename}
 
@@ -222,6 +439,10 @@ import matplotlib.pyplot as plt
 from scipy import stats
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 
 # Set style for better plots
 plt.style.use('default')
@@ -229,7 +450,7 @@ plt.style.use('default')
 # Try to use seaborn if available
 try:
     import seaborn as sns
-    sns.set_palette("husl")
+sns.set_palette("husl")
     print("Using seaborn for enhanced plots")
 except ImportError:
     print("Using matplotlib default style")
@@ -289,7 +510,7 @@ if len(numerical_cols) > 0:
     # Try to use seaborn for heatmap, fallback to matplotlib
     try:
         import seaborn as sns
-        sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0)
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', center=0)
     except ImportError:
         # Fallback to matplotlib
         plt.imshow(correlation_matrix, cmap='coolwarm', aspect='auto')
@@ -355,13 +576,67 @@ print("This code provides a basic EDA framework.")
 print("Customize it based on your specific dataset and analysis goals.")
 '''
         
+        # Ensure reports directory exists
+        os.makedirs(settings.reports_dir, exist_ok=True)
+
+        # Append optional ML training code if available
+        ml_cfg = job.get("ml") or {}
+        if ml_cfg.get("enabled") and ml_cfg.get("target"):
+            target = ml_cfg.get("target")
+            code_content += f"""
+
+print("\n=== Supervised ML Training ===")
+target_column = '{target}'
+if target_column in df.columns:
+    df_ml = df.dropna(subset=[target_column]).copy()
+    y = df_ml[target_column]
+    X = df_ml.drop(columns=[target_column])
+    # Handle missing values: numeric -> median, categorical -> 'Missing'
+    num_cols = X.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = [c for c in X.columns if c not in num_cols]
+    if len(num_cols) > 0:
+        X[num_cols] = X[num_cols].fillna(X[num_cols].median())
+    for c in cat_cols:
+        X[c] = X[c].fillna('Missing')
+    X = pd.get_dummies(X, drop_first=True)
+    if X.shape[1] > 0:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y if y.nunique() <= 20 else None
+        )
+
+        # Train Logistic Regression
+        scaler = StandardScaler(with_mean=False)
+        Xtr = scaler.fit_transform(X_train)
+        Xte = scaler.transform(X_test)
+        logreg = LogisticRegression(max_iter=1000)
+        logreg.fit(Xtr, y_train)
+        logreg_acc = accuracy_score(y_test, logreg.predict(Xte))
+        print(f"Logistic Regression Accuracy: {logreg_acc:.4f}")
+
+        # Train Random Forest
+        rf = RandomForestClassifier(n_estimators=200, random_state=42)
+        rf.fit(X_train, y_train)
+        rf_acc = accuracy_score(y_test, rf.predict(X_test))
+        print(f"Random Forest Accuracy: {rf_acc:.4f}")
+
+        best_model_name = 'Logistic Regression' if logreg_acc >= rf_acc else 'Random Forest'
+        best_acc = max(logreg_acc, rf_acc)
+        print(f"Best Model: {best_model_name} (Accuracy: {best_acc:.4f})")
+    else:
+        print("No usable features after preprocessing; ML skipped.")
+else:
+    print(f"Target column '{target}' not found; ML skipped.")
+"""
+
+        # Safely interpolate only timestamp and filename tokens
+        code_content = code_content.replace('{current_time}', current_time).replace('{filename}', filename)
         with open(code_path, 'w', encoding='utf-8') as f:
             f.write(code_content)
         
-        return None
+        return code_path
         
     except Exception as e:
-        print(f"Python code generation disabled")
+        print(f"Error generating Python code: {e}")
         return None
 
 def generate_r_code(job: dict, job_id: str) -> str:
@@ -698,7 +973,7 @@ def generate_excel_report(job: dict, job_id: str) -> str:
         return None
 
 def generate_pdf_report(job: dict, job_id: str) -> str:
-    """Generate PDF report"""
+    """Generate PDF report with website-matching design"""
     if not REPORTLAB_AVAILABLE:
         print("ReportLab not available for PDF generation")
         return None
@@ -713,35 +988,97 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         print(f"Analysis results keys: {list(analysis_results.keys())}")
         print(f"Visualizations keys: {list(visualizations.keys())}")
         
-        doc = SimpleDocTemplate(report_path, pagesize=A4)
+        doc = SimpleDocTemplate(report_path, pagesize=A4, 
+                              rightMargin=72, leftMargin=72, 
+                              topMargin=72, bottomMargin=72)
         styles = getSampleStyleSheet()
         story = []
         
-        # Title Page
+        # Define custom styles matching website design
+        # Primary brand colors from website
+        primary_blue = colors.HexColor('#3498db')
+        secondary_blue = colors.HexColor('#2980b9')
+        dark_gray = colors.HexColor('#2c3e50')
+        light_gray = colors.HexColor('#7f8c8d')
+        background_gray = colors.HexColor('#f8f9fa')
+        white = colors.HexColor('#ffffff')
+        
+        # Custom title style matching website hero title
         title_style = ParagraphStyle(
-            'CustomTitle',
+            'WebsiteTitle',
             parent=styles['Heading1'],
-            fontSize=28,
+            fontSize=32,
+            spaceAfter=20,
+            alignment=TA_CENTER,
+            textColor=primary_blue,
+            fontName='Helvetica-Bold',
+            leading=40
+        )
+        
+        # Subtitle style matching website subtitle
+        subtitle_style = ParagraphStyle(
+            'WebsiteSubtitle',
+            parent=styles['Normal'],
+            fontSize=14,
             spaceAfter=30,
             alignment=TA_CENTER,
-            textColor=colors.HexColor('#667EEA')
+            textColor=light_gray,
+            fontName='Helvetica',
+            leading=20
         )
-        story.append(Paragraph("🚀 DataScribe Analysis Report", title_style))
-        story.append(Spacer(1, 30))
         
-        # Add timestamp
+        # Section heading style matching website section titles
+        section_style = ParagraphStyle(
+            'WebsiteSection',
+            parent=styles['Heading2'],
+            fontSize=20,
+            spaceAfter=15,
+            textColor=dark_gray,
+            fontName='Helvetica-Bold',
+            leading=24,
+            borderWidth=0,
+            borderColor=primary_blue,
+            borderPadding=5
+        )
+        
+        # Card style for content blocks
+        card_style = ParagraphStyle(
+            'WebsiteCard',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceAfter=12,
+            textColor=dark_gray,
+            fontName='Helvetica',
+            leading=16,
+            leftIndent=0,
+            rightIndent=0
+        )
+        
+        # Title Page with website design
+        story.append(Paragraph("DataScribe Analysis Report", title_style))
+        story.append(Paragraph("Transform Your Data Into Insights", subtitle_style))
+        
+        # Add timestamp with website styling
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        story.append(Paragraph(f"Generated on: {timestamp}", styles['Normal']))
-        story.append(Spacer(1, 40))
+        timestamp_style = ParagraphStyle(
+            'Timestamp',
+            parent=styles['Normal'],
+            fontSize=10,
+            spaceAfter=40,
+            alignment=TA_CENTER,
+            textColor=light_gray,
+            fontName='Helvetica-Oblique'
+        )
+        story.append(Paragraph(f"Generated on: {timestamp}", timestamp_style))
         
-        # Report Summary
-        story.append(Paragraph("📋 Report Summary", styles['Heading3']))
-        story.append(Paragraph("This report provides a comprehensive analysis of your dataset including data quality assessment, statistical summaries, and AI-powered insights.", styles['Normal']))
+        # Report Summary with website styling
+        story.append(Paragraph("Report Summary", section_style))
+        story.append(Paragraph("This report provides a comprehensive analysis of your dataset including data quality assessment, statistical summaries, and AI-powered insights.", card_style))
         story.append(Spacer(1, 20))
         
-        # Table of Contents
-        story.append(Paragraph("📋 Table of Contents", styles['Heading2']))
-        story.append(Spacer(1, 20))
+        # Table of Contents with website styling
+        story.append(Paragraph("Table of Contents", section_style))
+        story.append(Spacer(1, 15))
         
         toc_items = [
             "1. Dataset Overview",
@@ -751,14 +1088,24 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
             "5. AI Insights & Recommendations"
         ]
         
+        toc_style = ParagraphStyle(
+            'TOC',
+            parent=styles['Normal'],
+            fontSize=12,
+            spaceAfter=8,
+            textColor=dark_gray,
+            fontName='Helvetica',
+            leading=16,
+            leftIndent=20
+        )
+        
         for item in toc_items:
-            story.append(Paragraph(item, styles['Normal']))
-            story.append(Spacer(1, 8))
+            story.append(Paragraph(item, toc_style))
         
         story.append(PageBreak())
         
-        # Dataset Overview
-        story.append(Paragraph("📊 Dataset Overview", styles['Heading2']))
+        # Dataset Overview with website styling
+        story.append(Paragraph("Dataset Overview", section_style))
         story.append(Spacer(1, 12))
         
         overview = analysis_results.get('overview', {})
@@ -776,43 +1123,58 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         
         overview_table = Table(overview_data)
         overview_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#17A2B8')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('BACKGROUND', (0, 0), (-1, 0), primary_blue),  # Header background
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),  # Header text color
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8F9FA')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#DEE2E6')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F8F9FA')])
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('TOPPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), background_gray),  # Row background
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dee2e6')),  # Grid lines
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, background_gray]),  # Alternating rows
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('TEXTCOLOR', (0, 1), (-1, -1), dark_gray),
+            ('PADDING', (0, 0), (-1, -1), 8)
         ]))
         story.append(overview_table)
         story.append(Spacer(1, 15))
         
-        # Add dataset insights
-        story.append(Paragraph("💡 Dataset Insights", styles['Heading3']))
+        # Add dataset insights with website styling
+        insights_style = ParagraphStyle(
+            'Insights',
+            parent=styles['Heading3'],
+            fontSize=16,
+            spaceAfter=10,
+            textColor=dark_gray,
+            fontName='Helvetica-Bold',
+            leading=20
+        )
+        
+        story.append(Paragraph("Dataset Insights", insights_style))
         total_rows = overview.get('shape', [0, 0])[0]
         total_cols = overview.get('shape', [0, 0])[1]
         
         if total_rows > 10000:
-            story.append(Paragraph("• Large dataset with substantial data for robust analysis", styles['Normal']))
+            story.append(Paragraph("• Large dataset with substantial data for robust analysis", card_style))
         elif total_rows > 1000:
-            story.append(Paragraph("• Medium-sized dataset suitable for most analytical tasks", styles['Normal']))
+            story.append(Paragraph("• Medium-sized dataset suitable for most analytical tasks", card_style))
         else:
-            story.append(Paragraph("• Compact dataset - consider data augmentation for complex models", styles['Normal']))
+            story.append(Paragraph("• Compact dataset - consider data augmentation for complex models", card_style))
         
         if total_cols > 50:
-            story.append(Paragraph("• High-dimensional dataset - feature selection may be beneficial", styles['Normal']))
+            story.append(Paragraph("• High-dimensional dataset - feature selection may be beneficial", card_style))
         elif total_cols > 10:
-            story.append(Paragraph("• Balanced feature set for comprehensive analysis", styles['Normal']))
+            story.append(Paragraph("• Balanced feature set for comprehensive analysis", card_style))
         else:
-            story.append(Paragraph("• Low-dimensional dataset - consider feature engineering", styles['Normal']))
+            story.append(Paragraph("• Low-dimensional dataset - consider feature engineering", card_style))
         
         story.append(Spacer(1, 20))
         story.append(PageBreak())
         
-        # Data Quality Assessment
-        story.append(Paragraph("🔍 Data Quality Assessment", styles['Heading2']))
+        # Data Quality Assessment with website styling
+        story.append(Paragraph("Data Quality Assessment", section_style))
         story.append(Spacer(1, 12))
         
         quality = analysis_results.get('data_quality', {})
@@ -833,41 +1195,46 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         
         quality_table = Table(quality_overview)
         quality_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#495057')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('BACKGROUND', (0, 0), (-1, 0), primary_blue),  # Header background
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),  # Header text color
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8F9FA')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#DEE2E6')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F8F9FA')])
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('TOPPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), background_gray),  # Row background
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#dee2e6')),  # Grid lines
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, background_gray]),  # Alternating rows
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('TEXTCOLOR', (0, 1), (-1, -1), dark_gray),
+            ('PADDING', (0, 0), (-1, -1), 8)
         ]))
         story.append(quality_table)
         story.append(Spacer(1, 15))
         
-        # Add quality insights
-        story.append(Paragraph("💡 Quality Insights", styles['Heading3']))
+        # Add quality insights with website styling
+        story.append(Paragraph("Quality Insights", insights_style))
         if quality_score >= 80:
-            story.append(Paragraph("• Your dataset has excellent data quality!", styles['Normal']))
+            story.append(Paragraph("• Your dataset has excellent data quality!", card_style))
         elif quality_score >= 60:
-            story.append(Paragraph("• Your dataset has good data quality with some areas for improvement.", styles['Normal']))
+            story.append(Paragraph("• Your dataset has good data quality with some areas for improvement.", card_style))
         else:
-            story.append(Paragraph("• Your dataset needs attention to improve data quality.", styles['Normal']))
+            story.append(Paragraph("• Your dataset needs attention to improve data quality.", card_style))
         
         # Add specific recommendations
         if quality.get('missing_values', {}).get('total_missing', 0) > 0:
-            story.append(Paragraph(f"• Consider handling {quality.get('missing_values', {}).get('total_missing', 0)} missing values", styles['Normal']))
+            story.append(Paragraph(f"• Consider handling {quality.get('missing_values', {}).get('total_missing', 0)} missing values", card_style))
         if quality.get('duplicates', {}).get('count', 0) > 0:
-            story.append(Paragraph(f"• {quality.get('duplicates', {}).get('count', 0)} duplicate rows detected - review for data integrity", styles['Normal']))
+            story.append(Paragraph(f"• {quality.get('duplicates', {}).get('count', 0)} duplicate rows detected - review for data integrity", card_style))
         if len(quality.get('constant_columns', [])) > 0:
-            story.append(Paragraph(f"• {len(quality.get('constant_columns', []))} constant columns detected - consider removal", styles['Normal']))
+            story.append(Paragraph(f"• {len(quality.get('constant_columns', []))} constant columns detected - consider removal", card_style))
         
         story.append(Spacer(1, 20))
         story.append(PageBreak())
         
-        # Statistical Summary
-        story.append(Paragraph("📈 Statistical Summary", styles['Heading2']))
+        # Statistical Summary with website styling
+        story.append(Paragraph("Statistical Summary", section_style))
         story.append(Spacer(1, 12))
         
         stats = analysis_results.get('statistics', {})
@@ -896,35 +1263,40 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
             if len(summary_data) > 1:  # Only add table if we have data
                 summary_table = Table(summary_data)
                 summary_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E86AB')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('BACKGROUND', (0, 0), (-1, 0), primary_blue),  # Header background
+                    ('TEXTCOLOR', (0, 0), (-1, 0), white),  # Header text color
                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                     ('FONTSIZE', (0, 0), (-1, 0), 9),
                     ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F7F7F7')),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#CCCCCC')),
-                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F0F0F0')])
+                    ('TOPPADDING', (0, 0), (-1, 0), 8),
+                    ('BACKGROUND', (0, 1), (-1, -1), background_gray),  # Row background
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#dee2e6')),  # Grid lines
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, background_gray]),  # Alternating rows
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('TEXTCOLOR', (0, 1), (-1, -1), dark_gray),
+                    ('PADDING', (0, 0), (-1, -1), 6)
                 ]))
                 story.append(summary_table)
                 story.append(Spacer(1, 15))
                 
-                # Add summary statistics
-                story.append(Paragraph("📊 Summary Statistics", styles['Heading3']))
-                story.append(Paragraph(f"• Total numerical columns analyzed: {len(summary_data) - 1}", styles['Normal']))
-                story.append(Paragraph(f"• Data points per column: {summary_data[1][1] if len(summary_data) > 1 else 'N/A'}", styles['Normal']))
+                # Add summary statistics with website styling
+                story.append(Paragraph("Summary Statistics", insights_style))
+                story.append(Paragraph(f"• Total numerical columns analyzed: {len(summary_data) - 1}", card_style))
+                story.append(Paragraph(f"• Data points per column: {summary_data[1][1] if len(summary_data) > 1 else 'N/A'}", card_style))
                 story.append(Spacer(1, 10))
         
         story.append(Spacer(1, 20))
         story.append(PageBreak())
         
-        # Visualizations Section
-        story.append(Paragraph("📊 Visualizations", styles['Heading2']))
+        # Visualizations Section with website styling
+        story.append(Paragraph("Visualizations", section_style))
         story.append(Spacer(1, 12))
         
-        # Visualizations Overview
+        # Visualizations Overview with website styling
         if visualizations:
-            story.append(Paragraph("📊 Generated Visualizations", styles['Heading3']))
+            story.append(Paragraph("Generated Visualizations", insights_style))
             story.append(Spacer(1, 8))
             
             # Create a structured list of visualizations
@@ -934,14 +1306,14 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
             
             # Display visualizations in a more organized way
             for i, viz_name in enumerate(viz_list, 1):
-                story.append(Paragraph(f"{i}. {viz_name}", styles['Normal']))
+                story.append(Paragraph(f"{i}. {viz_name}", card_style))
             
             story.append(Spacer(1, 15))
-            story.append(Paragraph("Below are the detailed visualizations for each analysis type:", styles['Normal']))
+            story.append(Paragraph("Below are the detailed visualizations for each analysis type:", card_style))
             story.append(Spacer(1, 10))
         else:
-            story.append(Paragraph("No visualizations were generated for this analysis.", styles['Normal']))
-            story.append(Paragraph("This may be due to insufficient data or analysis configuration.", styles['Normal']))
+            story.append(Paragraph("No visualizations were generated for this analysis.", card_style))
+            story.append(Paragraph("This may be due to insufficient data or analysis configuration.", card_style))
             story.append(Spacer(1, 10))
         
         # Add visualization images if they exist
@@ -949,8 +1321,8 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
             for i, (viz_name, viz_path) in enumerate(visualizations.items()):
                 if viz_path and os.path.exists(viz_path):
                     try:
-                        # Add visualization title with better formatting
-                        story.append(Paragraph(f"📊 {viz_name.replace('_', ' ').title()}", styles['Heading3']))
+                        # Add visualization title with website styling
+                        story.append(Paragraph(f"{viz_name.replace('_', ' ').title()}", insights_style))
                         story.append(Spacer(1, 8))
                         
                         # Add the image
@@ -975,8 +1347,8 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         
         story.append(PageBreak())
         
-        # AI Insights & Recommendations
-        story.append(Paragraph("🤖 AI Insights & Recommendations", styles['Heading2']))
+        # AI Insights & Recommendations with website styling
+        story.append(Paragraph("AI Insights & Recommendations", section_style))
         story.append(Spacer(1, 12))
         
         insights = analysis_results.get('insights', {})
@@ -984,17 +1356,17 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
             for insight_type, insight_list in insights.items():
                 if insight_list:
                     # Create a styled insight section
-                    story.append(Paragraph(f"📌 {insight_type.replace('_', ' ').title()}", styles['Heading3']))
+                    story.append(Paragraph(f"{insight_type.replace('_', ' ').title()}", insights_style))
                     story.append(Spacer(1, 6))
                     
-                    # Add insights with better formatting
+                    # Add insights with website styling
                     for i, insight in enumerate(insight_list, 1):
-                        story.append(Paragraph(f"{i}. {insight}", styles['Normal']))
+                        story.append(Paragraph(f"{i}. {insight}", card_style))
                     
                     story.append(Spacer(1, 10))
         else:
-            story.append(Paragraph("No specific insights available for this dataset.", styles['Normal']))
-            story.append(Paragraph("Consider running additional analysis or providing a target variable for more detailed recommendations.", styles['Normal']))
+            story.append(Paragraph("No specific insights available for this dataset.", card_style))
+            story.append(Paragraph("Consider running additional analysis or providing a target variable for more detailed recommendations.", card_style))
         
         story.append(Spacer(1, 20))
         
@@ -1146,11 +1518,22 @@ async def download_pdf_report(job_id: str):
         filename=f"DataScribe_Report_{job_id}.pdf"
     )
 
-# Python code download temporarily disabled
+# Python code download disabled per request
 # @app.get("/download/{job_id}/code/python")
 # async def download_python_code(job_id: str):
-#     """Download Python analysis code - TEMPORARILY DISABLED"""
-#     raise HTTPException(status_code=503, detail="Python code generation temporarily disabled")
+#     """Download Python analysis code"""
+#     if job_id not in jobs:
+#         raise HTTPException(status_code=404, detail="Job not found")
+#     job = jobs[job_id]
+#     # Generate Python code (includes optional ML section)
+#     code_path = generate_python_code(job, job_id)
+#     if not code_path or not os.path.exists(code_path):
+#         raise HTTPException(status_code=500, detail="Failed to generate Python code")
+#     return FileResponse(
+#         code_path,
+#         media_type='text/x-python',
+#         filename=f"DataScribe_Python_Code_{job_id}.py"
+#     )
 
 @app.get("/download/{job_id}/code/r")
 async def download_r_code(job_id: str):
