@@ -17,9 +17,13 @@ import uvicorn
 from utils.config import settings
 
 if __name__ == "__main__":
+    # Use Render's PORT environment variable if available
+    port = int(os.environ.get("PORT", settings.port))
+    host = "0.0.0.0" if os.environ.get("PORT") else settings.host
+    
     print(f"Starting {settings.app_name} v{settings.app_version}")
     print(f"{settings.app_subtitle}")
-    print(f"Server: http://{settings.host}:{settings.port}")
+    print(f"Server: http://{host}:{port}")
     print(f"Debug mode: {settings.debug}")
     print(f"Upload directory: {settings.upload_dir}")
     print(f"Reports directory: {settings.reports_dir}")
@@ -27,8 +31,8 @@ if __name__ == "__main__":
     
     uvicorn.run(
         "web.main:app",
-        host=settings.host,
-        port=settings.port,
+        host=host,
+        port=port,
         reload=settings.reload,
         log_level="info" if settings.debug else "warning"
     )
