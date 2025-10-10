@@ -1,18 +1,18 @@
-# Core Data Science (minimal for Render free tier)
+# Core Data Science
 pandas>=2.0.0
 numpy>=1.24.0
 scikit-learn>=1.3.0
-# scipy>=1.10.0  # Commented out for Render free tier
+scipy>=1.10.0
 
-# Visualization (minimal)
+# Visualization
 matplotlib>=3.7.0
-# seaborn>=0.12.0  # Commented out for Render free tier
-# plotly>=5.15.0  # Commented out for Render free tier
-# bokeh>=3.2.0  # Commented out for Render free tier
+seaborn>=0.12.0
+plotly>=5.15.0
+bokeh>=3.2.0
 
 # ML Models (Optional - will fallback gracefully if not installed)
-# xgboost>=1.7.0  # Commented out for Render free tier
-# lightgbm>=4.0.0  # Commented out for Render free tier
+xgboost>=1.7.0
+lightgbm>=4.0.0
 # catboost>=1.2.0  # Not currently used
 
 # Web Framework & API

@@ -17,7 +17,7 @@ import uvicorn
 from utils.config import settings
 
 if __name__ == "__main__":
-    # Use Render's PORT environment variable if available
+    # Use Railway's PORT environment variable if available
     port = int(os.environ.get("PORT", settings.port))
     host = "0.0.0.0" if os.environ.get("PORT") else settings.host
     
