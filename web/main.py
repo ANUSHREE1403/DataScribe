@@ -11,8 +11,8 @@ from datetime import datetime
 
 # Import DataScribe components
 try:
-    from core.eda_engine import run_eda
-    from core.visualization_engine import generate_visualizations
+from core.eda_engine import run_eda
+from core.visualization_engine import generate_visualizations
     CORE_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Core components not available: {e}")
@@ -145,11 +145,11 @@ async def analyze_dataset(
                 print(f"Processing {plot_type}: {plot_file}")
                 if plot_file and plot_file != "no_target_data.png":
                     # Check if the file exists in current directory
-                    if os.path.exists(plot_file):
-                        new_path = os.path.join("static", f"{job_id}_{plot_type}.png")
-                        shutil.move(plot_file, new_path)
-                        plot_files[plot_type] = f"/static/{job_id}_{plot_type}.png"
-                        print(f"Moved {plot_type} plot to {new_path}")
+                if os.path.exists(plot_file):
+                    new_path = os.path.join("static", f"{job_id}_{plot_type}.png")
+                    shutil.move(plot_file, new_path)
+                    plot_files[plot_type] = f"/static/{job_id}_{plot_type}.png"
+                    print(f"Moved {plot_type} plot to {new_path}")
                     else:
                         print(f"Warning: Plot file {plot_file} not found for {plot_type}")
                         plot_files[plot_type] = None
@@ -1287,7 +1287,7 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
                 story.append(Paragraph("Summary Statistics", insights_style))
                 story.append(Paragraph(f"• Total numerical columns analyzed: {len(summary_data) - 1}", card_style))
                 story.append(Paragraph(f"• Data points per column: {summary_data[1][1] if len(summary_data) > 1 else 'N/A'}", card_style))
-                story.append(Spacer(1, 10))
+                        story.append(Spacer(1, 10))
         
         story.append(Spacer(1, 20))
         story.append(PageBreak())
@@ -1316,7 +1316,7 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         else:
             story.append(Paragraph("No visualizations were generated for this analysis.", card_style))
             story.append(Paragraph("This may be due to insufficient data or analysis configuration.", card_style))
-            story.append(Spacer(1, 10))
+        story.append(Spacer(1, 10))
         
         # Add visualization images if they exist
         if visualizations:
@@ -1345,7 +1345,7 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
                 else:
                     print(f"Visualization path not found or invalid: {viz_name} -> {viz_path}")
                     story.append(Paragraph(f"Visualization: {viz_name} (file not found)", styles['Normal']))
-                    story.append(Spacer(1, 10))
+                        story.append(Spacer(1, 10))
         
         story.append(PageBreak())
         
@@ -1355,11 +1355,11 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         
         insights = analysis_results.get('insights', {})
         if insights:
-            for insight_type, insight_list in insights.items():
-                if insight_list:
+        for insight_type, insight_list in insights.items():
+            if insight_list:
                     # Create a styled insight section
                     story.append(Paragraph(f"{insight_type.replace('_', ' ').title()}", insights_style))
-                    story.append(Spacer(1, 6))
+                story.append(Spacer(1, 6))
                     
                     # Add insights with website styling
                     for i, insight in enumerate(insight_list, 1):
