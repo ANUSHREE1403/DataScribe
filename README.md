@@ -8,24 +8,38 @@
 
 ## 🚀 Overview
 
-DataScribe is an AI-powered Exploratory Data Analysis (EDA) platform that automates the entire data analysis workflow. It transforms raw datasets into comprehensive, human-readable insights with beautiful visualizations and actionable recommendations.
+DataScribe is an AI-powered Exploratory Data Analysis (EDA) platform that automates the entire data analysis workflow. It transforms raw datasets into comprehensive, human-readable insights with beautiful visualizations, machine learning capabilities, and actionable recommendations.
 
 ## ✨ Features
 
-### Version 1 MVP (Current)
+### Core Analysis Features
 - **📊 Automated EDA**: Comprehensive data analysis with configurable sections
-- **🔍 Data Quality Assessment**: Missing values, duplicates, outliers detection
+- **🔍 Data Quality Assessment**: Missing values, duplicates, outliers detection with quality scoring
 - **📈 Smart Visualizations**: Univariate, bivariate, and multivariate analysis plots
 - **📋 Report Generation**: HTML, PDF, and Excel export capabilities
 - **🎯 Target Analysis**: Optional target variable analysis for ML tasks
 - **💡 AI Insights**: Automated recommendations and data quality scoring
 
-### Planned Features (Version 2)
-- **🔐 User Authentication**: Login/signup with OAuth support
-- **💾 History Dashboard**: Save and retrieve past analyses
-- **📝 Feedback System**: Rate and comment on analysis quality
-- **🌐 Cloud Deployment**: Multi-user access and collaboration
-- **🔧 Code Export**: Python/R scripts reproducing analysis steps
+### Machine Learning Capabilities
+- **🤖 ML Model Training**: Train multiple ML models with auto-selection
+- **📊 Model Evaluation**: Comprehensive metrics (accuracy, precision, recall, F1, ROC-AUC)
+- **📈 Confusion Matrix**: Visual model performance assessment
+- **🔄 Cross-Validation**: K-fold validation with mean ± std scores
+- **🎯 Feature Importance**: Top features and coefficients analysis
+- **📋 Model Comparison**: Auto-select best performing model from:
+  - Logistic Regression
+  - Random Forest
+  - XGBoost
+  - LightGBM
+  - SVM (Support Vector Machine)
+  - KNN (K-Nearest Neighbors)
+
+### User Experience
+- **🎨 Modern UI/UX**: Professional, responsive design with animations
+- **📱 Mobile-Friendly**: Optimized for all device sizes
+- **⚡ Fast Processing**: Optimized engine for quick analysis
+- **📊 Interactive Results**: Rich visualizations and detailed metrics
+- **💾 Multiple Formats**: Export in PDF, Excel, HTML, and R code
 
 ## 🏗️ Project Structure
 
@@ -51,8 +65,8 @@ datascribe/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/datascribe.git
-   cd datascribe
+   git clone https://github.com/ANUSHREE1403/DataScribe.git
+   cd DataScribe
    ```
 
 2. **Install dependencies**
@@ -62,7 +76,7 @@ datascribe/
 
 3. **Run the application**
    ```bash
-   python web/main.py
+   python run.py
    ```
 
 4. **Open your browser**
@@ -72,20 +86,33 @@ datascribe/
 
 ### Web Interface
 1. Upload your dataset (CSV, Excel, Parquet)
-2. Configure analysis options (target column, visualization preferences)
+2. Configure analysis options:
+   - Target column (optional, for supervised ML)
+   - Visualization preferences
+   - ML model training (optional)
+   - Model selection (Auto, Logistic Regression, Random Forest, XGBoost, LightGBM, SVM, KNN)
 3. Run the analysis
-4. View results and download reports
+4. View comprehensive results including:
+   - Data quality assessment
+   - Statistical summaries
+   - Interactive visualizations
+   - ML model performance metrics
+   - Confusion matrix
+   - Feature importance
+5. Download reports in multiple formats
 
 ### API Usage
 ```python
 import requests
 
-# Upload and analyze dataset
+# Upload and analyze dataset with ML training
 files = {'file': open('dataset.csv', 'rb')}
 data = {
     'target_column': 'target',
     'include_plots': True,
-    'include_code': False
+    'include_reports': True,
+    'train_model': True,
+    'model_choice': 'auto'  # or specific model like 'rf', 'xgboost', etc.
 }
 
 response = requests.post('http://localhost:8000/analyze', 
@@ -94,7 +121,13 @@ result = response.json()
 
 # Get analysis results
 job_id = result['job_id']
-results = requests.get(f'http://localhost:8000/api/results/{job_id}').json()
+results = requests.get(f'http://localhost:8000/results/{job_id}').json()
+
+# Download reports
+pdf_report = requests.get(f'http://localhost:8000/download/{job_id}/report/pdf')
+excel_report = requests.get(f'http://localhost:8000/download/{job_id}/report/excel')
+html_report = requests.get(f'http://localhost:8000/download/{job_id}/report/html')
+r_code = requests.get(f'http://localhost:8000/download/{job_id}/code/r')
 ```
 
 ## 🔧 Configuration
@@ -133,6 +166,7 @@ CORRELATION_THRESHOLD=0.7
 - **Bivariate Analysis**: Correlation matrices, feature relationships
 - **Multivariate Analysis**: PCA, feature importance
 - **Target Analysis**: Classification/regression target insights
+- **ML Results**: Confusion matrix, feature importance plots, model performance charts
 
 ## 📈 Report Types
 
@@ -184,7 +218,7 @@ pytest tests/
 
 ### Local Development
 ```bash
-python web/main.py
+python run.py
 ```
 
 ### Production
@@ -210,8 +244,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/datascribe/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/datascribe/discussions)
+- **Issues**: [GitHub Issues](https://github.com/ANUSHREE1403/DataScribe/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/ANUSHREE1403/DataScribe/discussions)
 - **Email**: workanushree14@gmail.com
 
 ## 🔮 Roadmap
@@ -220,6 +254,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] Visualization System
 - [x] Report Generation
 - [x] Web Interface
+- [x] Machine Learning Integration
+- [x] Modern UI/UX Design
+- [x] Multiple ML Models (LR, RF, XGBoost, LightGBM, SVM, KNN)
+- [x] Comprehensive ML Metrics
+- [x] Professional PDF Reports
 - [ ] User Authentication
 - [ ] History Dashboard
 - [ ] Feedback System
