@@ -10,10 +10,10 @@ seaborn>=0.12.0
 plotly>=5.15.0
 bokeh>=3.2.0
 
-# ML Models
+# ML Models (Optional - will fallback gracefully if not installed)
 xgboost>=1.7.0
 lightgbm>=4.0.0
-catboost>=1.2.0
+# catboost>=1.2.0  # Not currently used
 
 # Web Framework & API
 fastapi>=0.104.0
@@ -21,23 +21,22 @@ uvicorn[standard]>=0.24.0
 jinja2>=3.1.0
 python-multipart>=0.0.6
 
-# Database & Storage
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0
-alembic>=1.12.0
-redis>=4.6.0
+# Database & Storage (Optional - for future features)
+# sqlalchemy>=2.0.0
+# psycopg2-binary>=2.9.0
+# alembic>=1.12.0
+# redis>=4.6.0
 
-# Authentication & Security
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-python-multipart>=0.0.6
+# Authentication & Security (Optional - for future features)
+# python-jose[cryptography]>=3.3.0
+# passlib[bcrypt]>=1.7.4
 
 # Report Generation
-weasyprint>=60.0
-nbconvert>=7.0.0
 openpyxl>=3.1.0
 xlsxwriter>=3.1.0
 reportlab>=4.0.0
+# weasyprint>=60.0  # Not currently used
+# nbconvert>=7.0.0  # Not currently used
 
 # Utilities
 joblib>=1.3.0
@@ -46,12 +45,12 @@ python-dotenv>=1.0.0
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 
-# Testing
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-httpx>=0.25.0
+# Testing (Optional - for development)
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# httpx>=0.25.0
 
-# Development
-black>=23.0.0
-flake8>=6.0.0
-pre-commit>=3.3.0
+# Development (Optional - for contributors)
+# black>=23.0.0
+# flake8>=6.0.0
+# pre-commit>=3.3.0
