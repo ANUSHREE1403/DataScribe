@@ -49,12 +49,14 @@ app = FastAPI(
 
 # Setup templates and static files
 templates = Jinja2Templates(directory="web/templates")
+
+# Ensure static directory exists before mounting
+os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Ensure directories exist
 os.makedirs(settings.upload_dir, exist_ok=True)
 os.makedirs(settings.reports_dir, exist_ok=True)
-os.makedirs("static", exist_ok=True)
 
 # Store analysis jobs
 jobs = {}
