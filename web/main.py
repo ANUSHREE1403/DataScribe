@@ -145,11 +145,11 @@ async def analyze_dataset(
                 print(f"Processing {plot_type}: {plot_file}")
                 if plot_file and plot_file != "no_target_data.png":
                     # Check if the file exists in current directory
-                if os.path.exists(plot_file):
-                    new_path = os.path.join("static", f"{job_id}_{plot_type}.png")
-                    shutil.move(plot_file, new_path)
-                    plot_files[plot_type] = f"/static/{job_id}_{plot_type}.png"
-                    print(f"Moved {plot_type} plot to {new_path}")
+                    if os.path.exists(plot_file):
+                        new_path = os.path.join("static", f"{job_id}_{plot_type}.png")
+                        shutil.move(plot_file, new_path)
+                        plot_files[plot_type] = f"/static/{job_id}_{plot_type}.png"
+                        print(f"Moved {plot_type} plot to {new_path}")
                     else:
                         print(f"Warning: Plot file {plot_file} not found for {plot_type}")
                         plot_files[plot_type] = None
