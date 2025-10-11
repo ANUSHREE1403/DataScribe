@@ -11,8 +11,8 @@ from datetime import datetime
 
 # Import DataScribe components
 try:
-from core.eda_engine import run_eda
-from core.visualization_engine import generate_visualizations
+    from core.eda_engine import run_eda
+    from core.visualization_engine import generate_visualizations
     CORE_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Core components not available: {e}")
