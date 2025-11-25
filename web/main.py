@@ -116,11 +116,11 @@ async def analyze_dataset(
     file_size = file.file.tell()
     file.file.seek(0)  # Reset to beginning
     
-    max_size = 20 * 1024 * 1024  # 20MB for Render free tier (512MB memory limit)
+    max_size = 10 * 1024 * 1024  # 10MB for Render free tier (512MB memory limit)
     if file_size > max_size:
         raise HTTPException(
             status_code=400, 
-            detail=f"File too large ({file_size / 1024 / 1024:.1f}MB). Maximum size: 50MB for free tier."
+            detail=f"File too large ({file_size / 1024 / 1024:.1f}MB). Maximum size: 10MB for free tier."
         )
     
     # Generate job ID
@@ -132,8 +132,8 @@ async def analyze_dataset(
         df = load_dataset(file)
         
         # Aggressive memory optimization for Render free tier (512MB limit)
-        max_rows = 10000  # Very aggressive limit for 512MB memory
-        max_cols = 20  # Reduced columns to save memory
+        max_rows = 5000  # Very aggressive limit for 512MB memory
+        max_cols = 15  # Reduced columns to save memory
         
         original_shape = df.shape
         if df.shape[0] > max_rows:
@@ -173,51 +173,86 @@ async def analyze_dataset(
         if not CORE_AVAILABLE:
             raise HTTPException(status_code=500, detail="Core analysis components not available. Please check dependencies.")
         
-        # Run EDA analysis with error handling
+        # Run EDA analysis with error handling and timeout protection
         print(f"Starting EDA analysis for job {job_id}")
+        analysis_results = {}
         try:
-            analysis_results = run_eda(df, target_column)
-            print(f"EDA analysis completed. Results keys: {list(analysis_results.keys())}")
+            # Wrap in try-except to prevent crashes
+            try:
+                analysis_results = run_eda(df, target_column)
+                print(f"EDA analysis completed. Results keys: {list(analysis_results.keys())}")
+            except MemoryError as mem_err:
+                print(f"Memory error during EDA: {str(mem_err)}")
+                # Return minimal results instead of crashing
+                analysis_results = {
+                    "overview": {"shape": list(df.shape), "columns": list(df.columns[:10])},
+                    "data_quality": {"data_quality_score": 0, "error": "Memory limit reached"},
+                    "statistics": {},
+                    "univariate": {},
+                    "bivariate": {},
+                    "multivariate": {},
+                    "insights": {"warnings": ["Analysis limited due to memory constraints. Please use a smaller dataset."]}
+                }
+            except Exception as eda_error:
+                print(f"EDA analysis error: {str(eda_error)}")
+                import traceback
+                print(f"EDA traceback: {traceback.format_exc()}")
+                # Return minimal results instead of crashing
+                analysis_results = {
+                    "overview": {"shape": list(df.shape), "columns": list(df.columns[:10])},
+                    "data_quality": {"data_quality_score": 0, "error": str(eda_error)},
+                    "statistics": {},
+                    "univariate": {},
+                    "bivariate": {},
+                    "multivariate": {},
+                    "insights": {"warnings": [f"Analysis encountered an error: {str(eda_error)}"]}
+                }
             
             # Clean up memory after EDA
             import gc
             gc.collect()
-        except Exception as eda_error:
-            print(f"EDA analysis error: {str(eda_error)}")
+        except Exception as outer_error:
+            print(f"Outer EDA wrapper error: {str(outer_error)}")
             import gc
             gc.collect()
-            # Store partial results
+            # Store minimal job to prevent complete failure
             jobs[job_id] = {
                 "job_id": job_id,
                 "status": "failed",
-                "error": f"EDA analysis failed: {str(eda_error)}",
+                "error": f"Analysis failed: {str(outer_error)}",
                 "created_at": datetime.now().isoformat()
             }
-            raise HTTPException(status_code=500, detail=f"EDA analysis failed: {str(eda_error)}")
+            raise HTTPException(status_code=500, detail=f"Analysis failed: {str(outer_error)}")
         
         # Generate visualizations if requested with error handling
-        # For Render free tier, limit visualizations to essential ones only
+        # For Render free tier, disable visualizations by default to save memory
         plot_files = {}
-        if include_plots and CORE_AVAILABLE:
+        # Only generate plots if explicitly requested AND dataset is small
+        should_generate_plots = include_plots and CORE_AVAILABLE and df.shape[0] <= 3000 and df.shape[1] <= 10
+        
+        if should_generate_plots:
             print(f"Generating visualizations for job {job_id}")
             try:
                 # Ensure static directory exists
                 os.makedirs("static", exist_ok=True)
                 
                 # For memory-constrained environments, generate only essential plots
-                # Skip heavy multivariate/PCA plots if dataset is large
-                if df.shape[0] > 5000 or df.shape[1] > 15:
-                    print("Large dataset detected - generating simplified visualizations")
-                    # Generate only essential visualizations
+                # Skip heavy multivariate/PCA plots
+                print("Generating simplified visualizations for memory efficiency")
+                try:
                     plot_files = generate_visualizations(df, analysis_results, target_column)
-                    # Remove heavy plots if they exist
+                    # Remove heavy plots to save memory
                     heavy_plots = ['multivariate', 'bivariate']
                     for plot_type in heavy_plots:
                         if plot_type in plot_files:
                             print(f"Skipping {plot_type} plot to save memory")
                             plot_files.pop(plot_type, None)
-                else:
-                    plot_files = generate_visualizations(df, analysis_results, target_column)
+                except MemoryError:
+                    print("Memory error during visualization - skipping all plots")
+                    plot_files = {}
+                except Exception as viz_err:
+                    print(f"Visualization error (non-critical): {str(viz_err)}")
+                    plot_files = {}
                 
                 print(f"Visualizations generated: {list(plot_files.keys())}")
                 
@@ -517,12 +552,27 @@ async def analyze_dataset(
         print(f"  - Plot files type: {type(plot_files)}")
         print(f"  - Plot files keys: {list(plot_files.keys()) if plot_files else 'None'}")
         
+        # Ensure job is stored before redirect (critical for preventing 502)
+        if job_id not in jobs:
+            print(f"WARNING: Job {job_id} not stored before redirect!")
+            # Store minimal job to prevent 404
+            jobs[job_id] = {
+                "job_id": job_id,
+                "status": "completed",
+                "analysis_results": analysis_results,
+                "visualizations": visualization_paths,
+                "visualization_urls": plot_files,
+                "filename": original_filename,
+                "created_at": datetime.now().isoformat()
+            }
+        
         # Final memory cleanup before redirect
         import gc
         if 'df' in locals():
             del df
         gc.collect()
         
+        print(f"Redirecting to results page for job {job_id}")
         # Redirect to results page
         return RedirectResponse(url=f"/results/{job_id}", status_code=303)
         
