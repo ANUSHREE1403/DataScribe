@@ -1287,7 +1287,7 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
                 story.append(Paragraph("Summary Statistics", insights_style))
                 story.append(Paragraph(f"• Total numerical columns analyzed: {len(summary_data) - 1}", card_style))
                 story.append(Paragraph(f"• Data points per column: {summary_data[1][1] if len(summary_data) > 1 else 'N/A'}", card_style))
-                        story.append(Spacer(1, 10))
+                story.append(Spacer(1, 10))
         
         story.append(Spacer(1, 20))
         story.append(PageBreak())
@@ -1345,7 +1345,7 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
                 else:
                     print(f"Visualization path not found or invalid: {viz_name} -> {viz_path}")
                     story.append(Paragraph(f"Visualization: {viz_name} (file not found)", styles['Normal']))
-                        story.append(Spacer(1, 10))
+                    story.append(Spacer(1, 10))
         
         story.append(PageBreak())
         
@@ -1355,11 +1355,11 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         
         insights = analysis_results.get('insights', {})
         if insights:
-        for insight_type, insight_list in insights.items():
-            if insight_list:
+            for insight_type, insight_list in insights.items():
+                if insight_list:
                     # Create a styled insight section
                     story.append(Paragraph(f"{insight_type.replace('_', ' ').title()}", insights_style))
-                story.append(Spacer(1, 6))
+                    story.append(Spacer(1, 6))
                     
                     # Add insights with website styling
                     for i, insight in enumerate(insight_list, 1):

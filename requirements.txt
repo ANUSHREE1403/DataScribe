@@ -7,12 +7,12 @@ scipy>=1.10.0
 # Visualization
 matplotlib>=3.7.0
 seaborn>=0.12.0
-plotly>=5.15.0
-bokeh>=3.2.0
+# plotly>=5.15.0  # Commented out for Render free tier (memory optimization)
+# bokeh>=3.2.0  # Commented out for Render free tier (memory optimization)
 
 # ML Models (Optional - will fallback gracefully if not installed)
-xgboost>=1.7.0
-lightgbm>=4.0.0
+# xgboost>=1.7.0  # Commented out for Render free tier (memory optimization)
+# lightgbm>=4.0.0  # Commented out for Render free tier (memory optimization)
 # catboost>=1.2.0  # Not currently used
 
 # Web Framework & API
