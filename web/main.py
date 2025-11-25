@@ -111,7 +111,7 @@ async def analyze_dataset(
     file_size = file.file.tell()
     file.file.seek(0)  # Reset to beginning
     
-    max_size = 50 * 1024 * 1024  # 50MB for Render free tier
+    max_size = 20 * 1024 * 1024  # 20MB for Render free tier (512MB memory limit)
     if file_size > max_size:
         raise HTTPException(
             status_code=400, 
@@ -126,20 +126,36 @@ async def analyze_dataset(
         print(f"Loading dataset for job {job_id}")
         df = load_dataset(file)
         
-        # Limit dataset size for Render free tier (sample if too large)
-        max_rows = 50000  # Reduced for Render free tier
-        max_cols = 50  # Reduced for Render free tier
+        # Aggressive memory optimization for Render free tier (512MB limit)
+        max_rows = 10000  # Very aggressive limit for 512MB memory
+        max_cols = 20  # Reduced columns to save memory
         
         original_shape = df.shape
         if df.shape[0] > max_rows:
-            print(f"Dataset has {df.shape[0]} rows, sampling to {max_rows} for Render free tier")
+            print(f"Dataset has {df.shape[0]} rows, sampling to {max_rows} for Render free tier (512MB limit)")
             df = df.sample(n=max_rows, random_state=42).reset_index(drop=True)
+            # Force garbage collection after sampling
+            import gc
+            gc.collect()
         
         if df.shape[1] > max_cols:
-            print(f"Dataset has {df.shape[1]} columns, limiting to first {max_cols}")
+            print(f"Dataset has {df.shape[1]} columns, limiting to first {max_cols} for memory optimization")
             df = df.iloc[:, :max_cols]
+            import gc
+            gc.collect()
         
         print(f"Dataset shape after optimization: {df.shape} (original: {original_shape})")
+        
+        # Convert to more memory-efficient dtypes
+        try:
+            for col in df.select_dtypes(include=['int64']).columns:
+                df[col] = pd.to_numeric(df[col], downcast='integer')
+            for col in df.select_dtypes(include=['float64']).columns:
+                df[col] = pd.to_numeric(df[col], downcast='float')
+            import gc
+            gc.collect()
+        except Exception as e:
+            print(f"Warning: Could not optimize dtypes: {e}")
         
         # Store dataset
         dataset_path = os.path.join(settings.upload_dir, f"{job_id}.csv")
@@ -157,8 +173,14 @@ async def analyze_dataset(
         try:
             analysis_results = run_eda(df, target_column)
             print(f"EDA analysis completed. Results keys: {list(analysis_results.keys())}")
+            
+            # Clean up memory after EDA
+            import gc
+            gc.collect()
         except Exception as eda_error:
             print(f"EDA analysis error: {str(eda_error)}")
+            import gc
+            gc.collect()
             # Store partial results
             jobs[job_id] = {
                 "job_id": job_id,
@@ -169,6 +191,7 @@ async def analyze_dataset(
             raise HTTPException(status_code=500, detail=f"EDA analysis failed: {str(eda_error)}")
         
         # Generate visualizations if requested with error handling
+        # For Render free tier, limit visualizations to essential ones only
         plot_files = {}
         if include_plots and CORE_AVAILABLE:
             print(f"Generating visualizations for job {job_id}")
@@ -176,14 +199,36 @@ async def analyze_dataset(
                 # Ensure static directory exists
                 os.makedirs("static", exist_ok=True)
                 
-                plot_files = generate_visualizations(df, analysis_results, target_column)
+                # For memory-constrained environments, generate only essential plots
+                # Skip heavy multivariate/PCA plots if dataset is large
+                if df.shape[0] > 5000 or df.shape[1] > 15:
+                    print("Large dataset detected - generating simplified visualizations")
+                    # Generate only essential visualizations
+                    plot_files = generate_visualizations(df, analysis_results, target_column)
+                    # Remove heavy plots if they exist
+                    heavy_plots = ['multivariate', 'bivariate']
+                    for plot_type in heavy_plots:
+                        if plot_type in plot_files:
+                            print(f"Skipping {plot_type} plot to save memory")
+                            plot_files.pop(plot_type, None)
+                else:
+                    plot_files = generate_visualizations(df, analysis_results, target_column)
+                
                 print(f"Visualizations generated: {list(plot_files.keys())}")
-                print(f"Plot files content: {plot_files}")
+                
+                # Force cleanup after visualization generation
+                import gc
+                import matplotlib.pyplot as plt
+                plt.close('all')  # Close all matplotlib figures
+                gc.collect()
+                
             except Exception as viz_error:
                 print(f"Visualization generation error: {str(viz_error)}")
                 # Continue without visualizations rather than failing completely
                 plot_files = {}
                 print("Continuing without visualizations due to error")
+                import gc
+                gc.collect()
             
             # Move plots to static directory and update URLs
             for plot_type, plot_file in plot_files.items():
@@ -286,7 +331,8 @@ async def analyze_dataset(
                         return {"name": "Logistic Regression", "accuracy": float(acc)}
 
                     def train_rf():
-                        clf = RandomForestClassifier(n_estimators=200, random_state=42)
+                        # Reduce n_estimators for memory efficiency
+                        clf = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=1)
                         clf.fit(X_train, y_train)
                         pred = clf.predict(X_test)
                         acc = accuracy_score(y_test, pred)
@@ -312,7 +358,7 @@ async def analyze_dataset(
                         result = train_rf()
                         chosen = result
                         chosen_name = "Random Forest"
-                        chosen_model = RandomForestClassifier(n_estimators=200, random_state=42)
+                        chosen_model = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=1)
                         chosen_model.fit(X_train, y_train)
                         y_pred = chosen_model.predict(X_test)
                         y_proba = None
@@ -337,7 +383,7 @@ async def analyze_dataset(
                             except Exception:
                                 y_proba = None
                         else:
-                            chosen_model = RandomForestClassifier(n_estimators=200, random_state=42)
+                            chosen_model = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=1)
                             chosen_model.fit(X_train, y_train)
                             y_pred = chosen_model.predict(X_test)
                             try:
@@ -381,8 +427,10 @@ async def analyze_dataset(
                     plt.xlabel('Predicted')
                     plt.ylabel('Actual')
                     plt.tight_layout()
-                    plt.savefig(cm_path)
+                    plt.savefig(cm_path, dpi=100, bbox_inches='tight')  # Lower DPI to save memory
                     plt.close()
+                    import gc
+                    gc.collect()
 
                     # Split and preprocessing summary
                     class_balance = pd.Series(y).value_counts().to_dict()
@@ -429,6 +477,13 @@ async def analyze_dataset(
                         "params": (chosen_model.get_params() if hasattr(chosen_model, 'get_params') else None)
                     }
                     print(f"ML training done: {jobs[job_id]['ml']}")
+                    
+                    # Clean up ML training memory
+                    import gc
+                    del X_train, X_test, y_train, y_test, chosen_model
+                    if 'Xtr' in locals():
+                        del Xtr, Xte
+                    gc.collect()
                 else:
                     jobs[job_id]["ml"] = {
                         "enabled": True,
@@ -456,6 +511,12 @@ async def analyze_dataset(
         print(f"  - Include plots: {include_plots}")
         print(f"  - Plot files type: {type(plot_files)}")
         print(f"  - Plot files keys: {list(plot_files.keys()) if plot_files else 'None'}")
+        
+        # Final memory cleanup before redirect
+        import gc
+        if 'df' in locals():
+            del df
+        gc.collect()
         
         # Redirect to results page
         return RedirectResponse(url=f"/results/{job_id}", status_code=303)
