@@ -106,12 +106,40 @@ async def analyze_dataset(
     if not any(file.filename.endswith(ext) for ext in settings.allowed_extensions):
         raise HTTPException(status_code=400, detail=f"Unsupported file format. Allowed: {', '.join(settings.allowed_extensions)}")
     
+    # Check file size (limit to 50MB for Render free tier)
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    
+    max_size = 50 * 1024 * 1024  # 50MB for Render free tier
+    if file_size > max_size:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"File too large ({file_size / 1024 / 1024:.1f}MB). Maximum size: 50MB for free tier."
+        )
+    
     # Generate job ID
     job_id = str(uuid.uuid4())
     
     try:
-        # Load dataset
+        # Load dataset with error handling
+        print(f"Loading dataset for job {job_id}")
         df = load_dataset(file)
+        
+        # Limit dataset size for Render free tier (sample if too large)
+        max_rows = 50000  # Reduced for Render free tier
+        max_cols = 50  # Reduced for Render free tier
+        
+        original_shape = df.shape
+        if df.shape[0] > max_rows:
+            print(f"Dataset has {df.shape[0]} rows, sampling to {max_rows} for Render free tier")
+            df = df.sample(n=max_rows, random_state=42).reset_index(drop=True)
+        
+        if df.shape[1] > max_cols:
+            print(f"Dataset has {df.shape[1]} columns, limiting to first {max_cols}")
+            df = df.iloc[:, :max_cols]
+        
+        print(f"Dataset shape after optimization: {df.shape} (original: {original_shape})")
         
         # Store dataset
         dataset_path = os.path.join(settings.upload_dir, f"{job_id}.csv")
@@ -124,21 +152,38 @@ async def analyze_dataset(
         if not CORE_AVAILABLE:
             raise HTTPException(status_code=500, detail="Core analysis components not available. Please check dependencies.")
         
-        # Run EDA analysis
+        # Run EDA analysis with error handling
         print(f"Starting EDA analysis for job {job_id}")
-        analysis_results = run_eda(df, target_column)
-        print(f"EDA analysis completed. Results keys: {list(analysis_results.keys())}")
+        try:
+            analysis_results = run_eda(df, target_column)
+            print(f"EDA analysis completed. Results keys: {list(analysis_results.keys())}")
+        except Exception as eda_error:
+            print(f"EDA analysis error: {str(eda_error)}")
+            # Store partial results
+            jobs[job_id] = {
+                "job_id": job_id,
+                "status": "failed",
+                "error": f"EDA analysis failed: {str(eda_error)}",
+                "created_at": datetime.now().isoformat()
+            }
+            raise HTTPException(status_code=500, detail=f"EDA analysis failed: {str(eda_error)}")
         
-        # Generate visualizations if requested
+        # Generate visualizations if requested with error handling
         plot_files = {}
         if include_plots and CORE_AVAILABLE:
             print(f"Generating visualizations for job {job_id}")
-            # Ensure static directory exists
-            os.makedirs("static", exist_ok=True)
-            
-            plot_files = generate_visualizations(df, analysis_results, target_column)
-            print(f"Visualizations generated: {list(plot_files.keys())}")
-            print(f"Plot files content: {plot_files}")
+            try:
+                # Ensure static directory exists
+                os.makedirs("static", exist_ok=True)
+                
+                plot_files = generate_visualizations(df, analysis_results, target_column)
+                print(f"Visualizations generated: {list(plot_files.keys())}")
+                print(f"Plot files content: {plot_files}")
+            except Exception as viz_error:
+                print(f"Visualization generation error: {str(viz_error)}")
+                # Continue without visualizations rather than failing completely
+                plot_files = {}
+                print("Continuing without visualizations due to error")
             
             # Move plots to static directory and update URLs
             for plot_type, plot_file in plot_files.items():
@@ -189,8 +234,9 @@ async def analyze_dataset(
             "ml": None
         }
         
-        # Optional: Train ML model
+        # Optional: Train ML model (with error handling)
         if train_model and target_column:
+            print(f"ML training requested for job {job_id}")
             try:
                 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
                 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, roc_auc_score, confusion_matrix
@@ -390,6 +436,8 @@ async def analyze_dataset(
                     }
             except Exception as ml_e:
                 print(f"ML training error: {ml_e}")
+                import traceback
+                print(f"ML training traceback: {traceback.format_exc()}")
                 jobs[job_id]["ml"] = {
                     "enabled": True,
                     "error": str(ml_e)
@@ -412,14 +460,30 @@ async def analyze_dataset(
         # Redirect to results page
         return RedirectResponse(url=f"/results/{job_id}", status_code=303)
         
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Analysis error for job {job_id}: {str(e)}")
+        print(f"Traceback: {error_trace}")
+        
         jobs[job_id] = {
             "job_id": job_id,
             "status": "failed",
             "error": str(e),
             "created_at": datetime.now().isoformat()
         }
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        
+        # Provide user-friendly error message
+        error_msg = str(e)
+        if "memory" in error_msg.lower() or "out of memory" in error_msg.lower():
+            error_msg = "Dataset too large for free tier. Please try a smaller dataset (max 50MB, 50k rows)."
+        elif "timeout" in error_msg.lower():
+            error_msg = "Analysis timed out. Please try a smaller dataset or disable visualizations."
+        
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {error_msg}")
 
 def generate_python_code(job: dict, job_id: str) -> str:
     """Generate Python code for the analysis"""
