@@ -88,6 +88,11 @@ async def home(request: Request):
     """Home page with upload form"""
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/analyze")
+async def analyze_get():
+    """Redirect GET requests to home page"""
+    return RedirectResponse(url="/", status_code=303)
+
 @app.post("/analyze")
 async def analyze_dataset(
     file: UploadFile = File(...),
