@@ -216,8 +216,8 @@ async def analyze_dataset(
         df = load_dataset(file)
         
         # Aggressive memory optimization for Render free tier (512MB limit)
-        max_rows = 5000  # Very aggressive limit for 512MB memory
-        max_cols = 15  # Reduced columns to save memory
+        max_rows = int(os.environ.get("MAX_ANALYSIS_ROWS", "1000"))
+        max_cols = int(os.environ.get("MAX_ANALYSIS_COLS", "6"))
         
         original_shape = df.shape
         if df.shape[0] > max_rows:
@@ -317,10 +317,15 @@ async def analyze_dataset(
             raise HTTPException(status_code=500, detail=f"Analysis failed: {str(outer_error)}")
         
         # Generate visualizations if requested with error handling
-        # For Render free tier, disable visualizations by default to save memory
+        # On Render (512MB) or when DISABLE_PLOTS=1, never generate plots to avoid OOM
         plot_files = {}
-        # Only generate plots if explicitly requested AND dataset is small (memory-safe for Render 512MB free tier)
-        should_generate_plots = include_plots and CORE_AVAILABLE and df.shape[0] <= 2000 and df.shape[1] <= 8
+        on_render = os.environ.get("RENDER") == "true"
+        disable_plots_env = os.environ.get("DISABLE_PLOTS", "").strip().lower() in ("1", "true", "yes")
+        should_generate_plots = (
+            not on_render and not disable_plots_env
+            and include_plots and CORE_AVAILABLE
+            and df.shape[0] <= 800 and df.shape[1] <= 6
+        )
         
         if should_generate_plots:
             print(f"Generating visualizations for job {job_id}")
