@@ -80,7 +80,18 @@ def get_db():
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    """
+    Hash the password using bcrypt.
+
+    bcrypt only uses the first 72 bytes of the password. To avoid
+    confusing errors for long passwords, we proactively truncate
+    to 72 characters before hashing.
+    """
+    if password is None:
+        password = ""
+    # Simple truncation to keep within bcrypt's limit
+    trimmed = password[:72]
+    return pwd_context.hash(trimmed)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
