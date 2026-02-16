@@ -58,7 +58,7 @@ class DataScribeVisualizer:
         
     def generate_all_visualizations(self, analysis_results: Dict) -> Dict[str, str]:
         """
-        Generate all visualizations for the dataset (matplotlib only when Plotly not available)
+        Generate all visualizations for the dataset
         Returns: Dict with plot file paths
         """
         plots = {}
@@ -69,14 +69,6 @@ class DataScribeVisualizer:
             
             # Data quality plots
             plots['data_quality'] = self._create_data_quality_plots(analysis_results.get('data_quality', {}))
-            
-            # Extra matplotlib-only bars and charts (always added)
-            plots['summary_bars'] = self._create_summary_bars(analysis_results)
-            plots['column_completeness'] = self._create_column_completeness_bars()
-            if self.numerical_cols:
-                plots['numerical_means'] = self._create_numerical_means_bars()
-            if self.categorical_cols:
-                plots['categorical_counts'] = self._create_categorical_counts_bars()
             
             # Univariate plots
             plots['univariate'] = self._create_univariate_plots(analysis_results.get('univariate', {}))
@@ -140,93 +132,6 @@ class DataScribeVisualizer:
         plt.savefig(filename, dpi=150, bbox_inches='tight')
         plt.close()
         
-        return filename
-    
-    def _create_summary_bars(self, analysis_results: Dict) -> str:
-        """Matplotlib-only: bar chart of key dataset metrics."""
-        fig, ax = plt.subplots(figsize=(10, 5))
-        metrics = ['Rows', 'Columns', 'Numerical', 'Categorical', 'Memory (MB)']
-        values = [
-            self.df.shape[0],
-            self.df.shape[1],
-            len(self.numerical_cols),
-            len(self.categorical_cols),
-            round(self.df.memory_usage(deep=True).sum() / 1024**2, 2)
-        ]
-        colors = [self.colors['primary'], self.colors['secondary'], self.colors['accent'], self.colors['info'], self.colors['warning']]
-        bars = ax.bar(metrics, values, color=colors)
-        ax.set_ylabel('Value')
-        ax.set_title('Dataset Summary')
-        ax.grid(True, alpha=0.3, axis='y')
-        for bar, val in zip(bars, values):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(values)*0.02, str(val), ha='center', va='bottom', fontsize=10)
-        plt.xticks(rotation=15)
-        plt.tight_layout()
-        filename = "summary_bars.png"
-        plt.savefig(filename, dpi=150, bbox_inches='tight')
-        plt.close()
-        return filename
-    
-    def _create_column_completeness_bars(self) -> str:
-        """Matplotlib-only: bar chart of % non-null (completeness) per column."""
-        n_rows = len(self.df)
-        completeness = (self.df.notna().sum() / n_rows * 100).sort_values(ascending=True)
-        n_cols = min(len(completeness), 20)
-        comp = completeness.tail(n_cols)
-        fig, ax = plt.subplots(figsize=(10, max(4, n_cols * 0.35)))
-        ax.barh(range(len(comp)), comp.values, color=[self.colors['accent'] if v == 100 else self.colors['warning'] for v in comp.values])
-        ax.set_yticks(range(len(comp)))
-        ax.set_yticklabels(comp.index, fontsize=9)
-        ax.set_xlabel('% Non-null')
-        ax.set_title('Column Completeness (%)')
-        ax.set_xlim(0, 105)
-        ax.grid(True, alpha=0.3, axis='x')
-        plt.tight_layout()
-        filename = "column_completeness.png"
-        plt.savefig(filename, dpi=150, bbox_inches='tight')
-        plt.close()
-        return filename
-    
-    def _create_numerical_means_bars(self) -> str:
-        """Matplotlib-only: bar chart of mean value per numerical column."""
-        num_cols = self.numerical_cols[:15]
-        means = self.df[num_cols].mean()
-        fig, ax = plt.subplots(figsize=(10, 5))
-        x = range(len(means))
-        ax.bar(x, means.values, color=self.colors['primary'])
-        ax.set_xticks(x)
-        ax.set_xticklabels(means.index, rotation=45, ha='right')
-        ax.set_ylabel('Mean')
-        ax.set_title('Numerical Columns – Mean Value')
-        ax.grid(True, alpha=0.3, axis='y')
-        plt.tight_layout()
-        filename = "numerical_means.png"
-        plt.savefig(filename, dpi=150, bbox_inches='tight')
-        plt.close()
-        return filename
-    
-    def _create_categorical_counts_bars(self) -> str:
-        """Matplotlib-only: top categories across first few categorical columns."""
-        cat_cols = self.categorical_cols[:3]
-        n_plots = len(cat_cols)
-        if n_plots == 0:
-            return "no_categorical_data.png"
-        fig, axes = plt.subplots(1, n_plots, figsize=(5 * n_plots, 5))
-        if n_plots == 1:
-            axes = [axes]
-        for ax, col in zip(axes, cat_cols):
-            vc = self.df[col].value_counts().head(10)
-            ax.bar(range(len(vc)), vc.values, color=self.colors['secondary'])
-            ax.set_xticks(range(len(vc)))
-            ax.set_xticklabels(vc.index, rotation=45, ha='right')
-            ax.set_ylabel('Count')
-            ax.set_title(f'{col} (top 10)')
-            ax.grid(True, alpha=0.3, axis='y')
-        plt.suptitle('Categorical Columns – Value Counts', fontsize=12, fontweight='bold', y=1.02)
-        plt.tight_layout()
-        filename = "categorical_counts.png"
-        plt.savefig(filename, dpi=150, bbox_inches='tight')
-        plt.close()
         return filename
     
     def _create_data_quality_plots(self, quality_data: Dict) -> str:

@@ -67,9 +67,10 @@ Base.metadata.create_all(bind=engine)
 
 
 # Password hashing
-# Use pbkdf2_sha256 to avoid bcrypt's 72‑byte password limit altogether.
+# Support both schemes: new signups use pbkdf2 (no 72-byte limit);
+# users who signed up when we used bcrypt can still log in.
 pwd_context = CryptContext(
-    schemes=["pbkdf2_sha256"],
+    schemes=["pbkdf2_sha256", "bcrypt"],
     deprecated="auto",
 )
 

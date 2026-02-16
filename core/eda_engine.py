@@ -20,7 +20,7 @@ try:
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
-    print("Warning: plotly not available")
+    # Plotly optional; analysis uses matplotlib. No need to warn.
 
 from typing import Dict, List, Tuple, Optional
 import warnings

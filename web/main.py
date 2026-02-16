@@ -153,7 +153,10 @@ async def login_post(
     if not user:
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "message": "Invalid email or password."},
+            {
+                "request": request,
+                "message": "Invalid email or password. On free hosting, accounts can be reset after redeploys; try signing up again.",
+            },
         )
     request.session["user_id"] = user.id
     return RedirectResponse(url="/", status_code=303)
@@ -316,8 +319,8 @@ async def analyze_dataset(
         # Generate visualizations if requested with error handling
         # For Render free tier, disable visualizations by default to save memory
         plot_files = {}
-        # Only generate plots if explicitly requested AND dataset is small (memory-safe for Render free tier)
-        should_generate_plots = include_plots and CORE_AVAILABLE and df.shape[0] <= 5000 and df.shape[1] <= 15
+        # Only generate plots if explicitly requested AND dataset is small (memory-safe for Render 512MB free tier)
+        should_generate_plots = include_plots and CORE_AVAILABLE and df.shape[0] <= 2000 and df.shape[1] <= 8
         
         if should_generate_plots:
             print(f"Generating visualizations for job {job_id}")
