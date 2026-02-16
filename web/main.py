@@ -316,8 +316,8 @@ async def analyze_dataset(
         # Generate visualizations if requested with error handling
         # For Render free tier, disable visualizations by default to save memory
         plot_files = {}
-        # Only generate plots if explicitly requested AND dataset is small
-        should_generate_plots = include_plots and CORE_AVAILABLE and df.shape[0] <= 3000 and df.shape[1] <= 10
+        # Only generate plots if explicitly requested AND dataset is small (memory-safe for Render free tier)
+        should_generate_plots = include_plots and CORE_AVAILABLE and df.shape[0] <= 5000 and df.shape[1] <= 10
         
         if should_generate_plots:
             print(f"Generating visualizations for job {job_id}")
