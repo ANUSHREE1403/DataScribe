@@ -67,7 +67,11 @@ Base.metadata.create_all(bind=engine)
 
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 to avoid bcrypt's 72‑byte password limit altogether.
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    deprecated="auto",
+)
 
 
 def get_db():
@@ -80,18 +84,8 @@ def get_db():
 
 
 def get_password_hash(password: str) -> str:
-    """
-    Hash the password using bcrypt.
-
-    bcrypt only uses the first 72 bytes of the password. To avoid
-    confusing errors for long passwords, we proactively truncate
-    to 72 characters before hashing.
-    """
-    if password is None:
-        password = ""
-    # Simple truncation to keep within bcrypt's limit
-    trimmed = password[:72]
-    return pwd_context.hash(trimmed)
+    """Hash the password using the configured scheme."""
+    return pwd_context.hash(password or "")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
