@@ -100,8 +100,13 @@ def load_dataset(file: UploadFile):
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, db=Depends(get_db)):
     """Home page with upload form"""
-    user = get_current_user(request, db)
-    return templates.TemplateResponse("index.html", {"request": request, "user": user})
+    try:
+        user = get_current_user(request, db)
+    except Exception as e:
+        print(f"DB/session error on home: {e}")
+        user = None
+    error = request.query_params.get("error", "")
+    return templates.TemplateResponse("index.html", {"request": request, "user": user, "error": error})
 
 
 @app.get("/signup", response_class=HTMLResponse)
@@ -184,8 +189,11 @@ async def analyze_dataset(
     include_python_code: bool = Form(False)
 ):
     """Analyze uploaded dataset"""
-    # Require login
-    user = get_current_user(request, db)
+    try:
+        user = get_current_user(request, db)
+    except Exception as db_err:
+        print(f"DB error in analyze: {db_err}")
+        return RedirectResponse(url="/?error=Database+unavailable.+Please+try+again.", status_code=303)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
     # Validate file
@@ -216,8 +224,8 @@ async def analyze_dataset(
         df = load_dataset(file)
         
         # Aggressive memory optimization for Render free tier (512MB limit)
-        max_rows = int(os.environ.get("MAX_ANALYSIS_ROWS", "1000"))
-        max_cols = int(os.environ.get("MAX_ANALYSIS_COLS", "6"))
+        max_rows = int(os.environ.get("MAX_ANALYSIS_ROWS", "500"))
+        max_cols = int(os.environ.get("MAX_ANALYSIS_COLS", "5"))
         
         original_shape = df.shape
         if df.shape[0] > max_rows:
@@ -732,14 +740,18 @@ async def analyze_dataset(
             "created_at": datetime.now().isoformat()
         }
         
-        # Provide user-friendly error message
+        # Provide user-friendly error message and redirect instead of 500 (avoids 502 on Render)
         error_msg = str(e)
         if "memory" in error_msg.lower() or "out of memory" in error_msg.lower():
-            error_msg = "Dataset too large for free tier. Please try a smaller dataset (max 50MB, 50k rows)."
+            error_msg = "Dataset too large for free tier. Try a smaller file."
         elif "timeout" in error_msg.lower():
-            error_msg = "Analysis timed out. Please try a smaller dataset or disable visualizations."
-        
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {error_msg}")
+            error_msg = "Analysis timed out. Try a smaller dataset."
+        elif "database" in error_msg.lower() or "connection" in error_msg.lower():
+            error_msg = "Database unavailable. Try again in a moment."
+        else:
+            error_msg = "Analysis failed. Try again or use a smaller file."
+        from urllib.parse import quote
+        return RedirectResponse(url="/?error=" + quote(error_msg), status_code=303)
 
 def generate_python_code(job: dict, job_id: str) -> str:
     """Generate Python code for the analysis"""

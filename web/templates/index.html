@@ -1262,6 +1262,12 @@
         </div>
     </header>
 
+    {% if error %}
+    <div class="error-banner" role="alert" style="background: #fee; border: 1px solid #c00; color: #c00; padding: 12px 24px; text-align: center; font-weight: 500;">
+        {{ error }}
+    </div>
+    {% endif %}
+
     <!-- Hero Section -->
     <section class="hero">
         <div class="hero-content">
