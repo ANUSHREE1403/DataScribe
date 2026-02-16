@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     reload: bool = True
     
     # Database Configuration
-    database_url: str = "postgresql://user:password@localhost/datascribe"
+    # Default: local SQLite file for easy development
+    database_url: str = "sqlite:///./datascribe.db"
     redis_url: str = "redis://localhost:6379"
     
     # Authentication

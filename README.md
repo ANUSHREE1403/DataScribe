@@ -41,6 +41,12 @@ DataScribe is an AI-powered Exploratory Data Analysis (EDA) platform that automa
 - **📊 Interactive Results**: Rich visualizations and detailed metrics
 - **💾 Multiple Formats**: Export in PDF, Excel, HTML, and R code
 
+### Authentication & History (Sem 8)
+- **🔐 Login & Sign Up**: User accounts with email and password (bcrypt)
+- **🔒 Protected Analysis**: Only logged-in users can run analyses
+- **📜 My Analyses**: Per-user history of past analyses (dataset, target, model, accuracy)
+- **🗄️ Database**: SQLite for local development; PostgreSQL for deployment (optional)
+
 ## 🏗️ Project Structure
 
 ```
@@ -85,25 +91,32 @@ datascribe/
 ## 📖 Usage
 
 ### Web Interface
-1. Upload your dataset (CSV, Excel, Parquet)
-2. Configure analysis options:
+1. **Sign up** or **log in** (required to run analyses)
+2. Upload your dataset (CSV, Excel, Parquet)
+3. Configure analysis options:
    - Target column (optional, for supervised ML)
    - Visualization preferences
    - ML model training (optional)
    - Model selection (Auto, Logistic Regression, Random Forest, XGBoost, LightGBM, SVM, KNN)
-3. Run the analysis
-4. View comprehensive results including:
+4. Run the analysis
+5. View comprehensive results including:
    - Data quality assessment
    - Statistical summaries
    - Interactive visualizations
    - ML model performance metrics
    - Confusion matrix
    - Feature importance
-5. Download reports in multiple formats
+6. Download reports in multiple formats or open **My Analyses** to see past runs
 
 ### API Usage
+The `/analyze` endpoint requires a logged-in session. Use a session (cookies) after logging in via `/login`.
+
 ```python
 import requests
+
+# Create session and log in first
+session = requests.Session()
+session.post('http://localhost:8000/login', data={'email': 'your@email.com', 'password': 'yourpassword'})
 
 # Upload and analyze dataset with ML training
 files = {'file': open('dataset.csv', 'rb')}
@@ -115,32 +128,36 @@ data = {
     'model_choice': 'auto'  # or specific model like 'rf', 'xgboost', etc.
 }
 
-response = requests.post('http://localhost:8000/analyze', 
-                       files=files, data=data)
-result = response.json()
+response = session.post('http://localhost:8000/analyze', files=files, data=data, allow_redirects=True)
+# On success you are redirected to /results/{job_id}; extract job_id from the final URL if needed
+job_id = response.url.split('/results/')[-1].split('?')[0] if '/results/' in response.url else None
 
-# Get analysis results
-job_id = result['job_id']
-results = requests.get(f'http://localhost:8000/results/{job_id}').json()
+# Get analysis results (use same session)
+results = session.get(f'http://localhost:8000/results/{job_id}')
 
-# Download reports
-pdf_report = requests.get(f'http://localhost:8000/download/{job_id}/report/pdf')
-excel_report = requests.get(f'http://localhost:8000/download/{job_id}/report/excel')
-html_report = requests.get(f'http://localhost:8000/download/{job_id}/report/html')
-r_code = requests.get(f'http://localhost:8000/download/{job_id}/code/r')
+# Download reports (use same session)
+pdf_report = session.get(f'http://localhost:8000/download/{job_id}/report/pdf')
+excel_report = session.get(f'http://localhost:8000/download/{job_id}/report/excel')
+html_report = session.get(f'http://localhost:8000/download/{job_id}/report/html')
+r_code = session.get(f'http://localhost:8000/download/{job_id}/code/r')
 ```
 
 ## 🔧 Configuration
 
-Create a `.env` file in the root directory:
+Create a `.env` file in the root directory (optional; defaults work for local use):
 
 ```env
 # App Configuration
 APP_NAME=DataScribe
 DEBUG=False
 
-# Database (for future versions)
-DATABASE_URL=postgresql://user:password@localhost/datascribe
+# Authentication (required for production; use a long random string)
+SECRET_KEY=your-secret-key-change-in-production
+
+# Database
+# Local: uses SQLite (datascribe.db) by default
+# Production: set DATABASE_URL to your PostgreSQL connection string
+# DATABASE_URL=postgresql://user:password@host:5432/dbname
 
 # File Storage
 UPLOAD_DIR=uploads
@@ -157,6 +174,8 @@ CORRELATION_THRESHOLD=0.7
 - **CSV** (.csv)
 - **Excel** (.xlsx, .xls)
 - **Parquet** (.parquet)
+
+Example datasets and suggested target columns (Titanic, Ecommerce, Sales) are listed in [tests/dataset_targets.md](tests/dataset_targets.md).
 
 ## 🎨 Visualization Features
 
@@ -220,8 +239,18 @@ pytest tests/
 ```bash
 python run.py
 ```
+Uses SQLite (`datascribe.db`) by default. No database setup required.
 
-### Production
+### Render / Railway (Web Service)
+1. Connect your GitHub repo to Render or Railway.
+2. Set **Build Command**: `pip install -r requirements.txt` (or leave default).
+3. Set **Start Command**: `python run.py`.
+4. Add **Environment Variables**:
+   - **SECRET_KEY**: A long random string for session cookies (e.g. generate with `python -c "import secrets; print(secrets.token_hex(32))"`).
+   - **DATABASE_URL** (optional): Your PostgreSQL connection URL if you added a Postgres database. If not set, the app uses SQLite on the server (data may not persist across restarts on free tier).
+5. Deploy; new pushes to your branch will trigger a new deploy.
+
+### Production (self-hosted)
 ```bash
 gunicorn web.main:app -w 4 -k uvicorn.workers.UvicornWorker
 ```
@@ -259,10 +288,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] Multiple ML Models (LR, RF, XGBoost, LightGBM, SVM, KNN)
 - [x] Comprehensive ML Metrics
 - [x] Professional PDF Reports
-- [ ] User Authentication
-- [ ] History Dashboard
+- [x] User Authentication (login / sign up)
+- [x] History Dashboard (My Analyses)
+- [x] Database (SQLite + PostgreSQL support)
+- [x] Cloud Deployment (Render / Railway)
 - [ ] Feedback System
-- [ ] Cloud Deployment
 - [ ] Mobile App
 
 ---

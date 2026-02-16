@@ -1,13 +1,15 @@
-from fastapi import FastAPI, File, UploadFile, Form, Request, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 import os
 import uuid
 import json
 from typing import Optional, List
 import shutil
 from datetime import datetime
+import pandas as pd
 
 # Import DataScribe components
 try:
@@ -19,6 +21,15 @@ except ImportError as e:
     CORE_AVAILABLE = False
 
 from utils.config import settings
+from web.auth import (
+    AnalysisJob,
+    User,
+    authenticate_user,
+    create_analysis_job,
+    create_user,
+    get_current_user,
+    get_db,
+)
 
 # Report generation imports
 try:
@@ -46,6 +57,9 @@ app = FastAPI(
     description=settings.app_subtitle,
     version=settings.app_version
 )
+
+# Session middleware for login sessions
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
 # Setup templates and static files
 templates = Jinja2Templates(directory="web/templates")
@@ -84,9 +98,71 @@ def load_dataset(file: UploadFile):
         raise HTTPException(status_code=400, detail=f"Error loading dataset: {str(e)}")
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
+async def home(request: Request, db=Depends(get_db)):
     """Home page with upload form"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    user = get_current_user(request, db)
+    return templates.TemplateResponse("index.html", {"request": request, "user": user})
+
+
+@app.get("/signup", response_class=HTMLResponse)
+async def signup_get(request: Request, db=Depends(get_db)):
+    user = get_current_user(request, db)
+    if user:
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse("signup.html", {"request": request, "message": None})
+
+
+@app.post("/signup", response_class=HTMLResponse)
+async def signup_post(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    full_name: Optional[str] = Form(None),
+    db=Depends(get_db),
+):
+    user = get_current_user(request, db)
+    if user:
+        return RedirectResponse(url="/", status_code=303)
+    try:
+        user = create_user(db, email=email.strip().lower(), password=password, full_name=full_name)
+        request.session["user_id"] = user.id
+        return RedirectResponse(url="/", status_code=303)
+    except ValueError as e:
+        return templates.TemplateResponse(
+            "signup.html",
+            {"request": request, "message": str(e)},
+        )
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_get(request: Request, db=Depends(get_db)):
+    user = get_current_user(request, db)
+    if user:
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse("login.html", {"request": request, "message": None})
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_post(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    db=Depends(get_db),
+):
+    user = authenticate_user(db, email=email.strip().lower(), password=password)
+    if not user:
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "message": "Invalid email or password."},
+        )
+    request.session["user_id"] = user.id
+    return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/", status_code=303)
 
 @app.get("/analyze")
 async def analyze_get():
@@ -95,6 +171,8 @@ async def analyze_get():
 
 @app.post("/analyze")
 async def analyze_dataset(
+    request: Request,
+    db=Depends(get_db),
     file: UploadFile = File(...),
     target_column: Optional[str] = Form(None),
     include_plots: bool = Form(True),
@@ -103,7 +181,10 @@ async def analyze_dataset(
     include_python_code: bool = Form(False)
 ):
     """Analyze uploaded dataset"""
-    
+    # Require login
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file uploaded")
@@ -144,8 +225,16 @@ async def analyze_dataset(
             gc.collect()
         
         if df.shape[1] > max_cols:
-            print(f"Dataset has {df.shape[1]} columns, limiting to first {max_cols} for memory optimization")
-            df = df.iloc[:, :max_cols]
+            print(f"Dataset has {df.shape[1]} columns, limiting to {max_cols} for memory optimization")
+            # If target column is specified, make sure to include it
+            if target_column and target_column in df.columns:
+                # Keep target column + first (max_cols-1) other columns
+                cols_to_keep = [c for c in df.columns if c != target_column][:max_cols-1] + [target_column]
+                df = df[cols_to_keep]
+                print(f"Preserved target column '{target_column}' in limited dataset")
+            else:
+                # Just take first max_cols columns
+                df = df.iloc[:, :max_cols]
             import gc
             gc.collect()
         
@@ -318,6 +407,22 @@ async def analyze_dataset(
             "created_at": datetime.now().isoformat(),
             "ml": None
         }
+
+        # Persist minimal analysis job in database for history
+        try:
+            ml_block = jobs[job_id].get("ml") or {}
+            accuracy_val = ml_block.get("accuracy") if isinstance(ml_block, dict) else None
+            create_analysis_job(
+                db,
+                user_id=user.id,
+                job_id=job_id,
+                dataset_name=original_filename,
+                target_column=target_column,
+                model_choice=model_choice,
+                accuracy=accuracy_val,
+            )
+        except Exception as db_err:
+            print(f"Warning: could not store analysis job in database: {db_err}")
         
         # Optional: Train ML model (with error handling)
         if train_model and target_column:
@@ -339,8 +444,22 @@ async def analyze_dataset(
                 print(f"Starting ML training for job {job_id} with choice: {model_choice}")
 
                 # Prepare data (simple baseline): one-hot encode categoricals, drop rows with missing target
-                df_ml = pd.read_csv(dataset_path)
+                df_ml = df.copy()  # Use the already-loaded df instead of reading from disk
+                
+                # Validate target column exists
+                if target_column not in df_ml.columns:
+                    raise ValueError(f"Target column '{target_column}' not found in dataset. Available columns: {list(df_ml.columns[:10])}")
+                
+                # Check if target column was dropped due to column limiting
+                if df_ml.shape[1] <= 15 and target_column not in df_ml.columns:
+                    raise ValueError(f"Target column '{target_column}' was excluded due to column limit (max 15 columns). Please ensure your target column is in the first 15 columns.")
+                
                 df_ml = df_ml.dropna(subset=[target_column])
+                
+                # Check if we have any data left after dropping NaN
+                if len(df_ml) == 0:
+                    raise ValueError(f"All rows were dropped after removing missing values in target column '{target_column}'. Please check your data.")
+                
                 y = df_ml[target_column]
                 X = df_ml.drop(columns=[target_column])
                 # Handle missing values: numeric -> median, categorical -> 'Missing'
@@ -532,10 +651,23 @@ async def analyze_dataset(
             except Exception as ml_e:
                 print(f"ML training error: {ml_e}")
                 import traceback
-                print(f"ML training traceback: {traceback.format_exc()}")
+                error_trace = traceback.format_exc()
+                print(f"ML training traceback: {error_trace}")
+                
+                # Provide user-friendly error message
+                error_msg = str(ml_e)
+                if "not found" in error_msg.lower() or "KeyError" in str(type(ml_e).__name__):
+                    error_msg = f"Target column '{target_column}' not found in dataset. Please check the column name and ensure it exists in your data."
+                elif "excluded due to column limit" in error_msg.lower():
+                    error_msg = f"Target column '{target_column}' was excluded because the dataset has more than 15 columns. Please ensure your target column is in the first 15 columns, or use a dataset with fewer columns."
+                elif "All rows were dropped" in error_msg:
+                    error_msg = f"All rows were dropped after removing missing values in target column '{target_column}'. Please check your data for missing values."
+                elif "empty" in error_msg.lower() or "no data" in error_msg.lower():
+                    error_msg = f"No valid data available for training. Please check your target column '{target_column}' and ensure it has valid values."
+                
                 jobs[job_id]["ml"] = {
                     "enabled": True,
-                    "error": str(ml_e)
+                    "error": error_msg
                 }
         elif train_model and not target_column:
             # User requested ML but didn't provide a target column
@@ -1565,8 +1697,9 @@ def generate_pdf_report(job: dict, job_id: str) -> str:
         return None
 
 @app.get("/results/{job_id}")
-async def get_results(request: Request, job_id: str):
+async def get_results(request: Request, job_id: str, db=Depends(get_db)):
     """Get analysis results"""
+    user = get_current_user(request, db)
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     
@@ -1588,11 +1721,15 @@ async def get_results(request: Request, job_id: str):
     print(f"Template data - Visualization URLs: {job.get('visualization_urls', 'NOT_FOUND')}")
     print(f"Template data - Visualizations: {job.get('visualizations', 'NOT_FOUND')}")
     
-    return templates.TemplateResponse("results.html", {
-        "request": request,
-        "job": job,
-        "analysis_results": job["analysis_results"]
-    })
+    return templates.TemplateResponse(
+        "results.html",
+        {
+            "request": request,
+            "job": job,
+            "analysis_results": job["analysis_results"],
+            "user": user,
+        },
+    )
 
 
 
@@ -1751,6 +1888,26 @@ async def health_check():
             "html": True
         }
     }
+
+
+@app.get("/history", response_class=HTMLResponse)
+async def history(request: Request, db=Depends(get_db)):
+    """Show analysis history for the logged-in user"""
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    analyses = (
+        db.query(AnalysisJob)
+        .filter(AnalysisJob.user_id == user.id)
+        .order_by(AnalysisJob.created_at.desc())
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        "history.html",
+        {"request": request, "user": user, "analyses": analyses},
+    )
 
 if __name__ == "__main__":
     import uvicorn

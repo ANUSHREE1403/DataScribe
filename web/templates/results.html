@@ -704,10 +704,26 @@
                 </div>
                 <div class="brand-title">DataScribe</div>
             </div>
-            <a href="/" class="back-btn">
-                <i class="fas fa-arrow-left"></i>
-                Back to Upload
-            </a>
+            <div style="display:flex;align-items:center;gap:12px;">
+                {% if user %}
+                    <span style="font-size:0.9rem;color:#7f8c8d;">Hi, {{ user.full_name or user.email }}</span>
+                    <a href="/history" class="back-btn" style="margin-right:0.5rem;">
+                        <i class="fas fa-clock"></i>
+                        My Analyses
+                    </a>
+                    <form method="post" action="/logout" style="margin:0;">
+                        <button type="submit" class="back-btn" style="border:none;cursor:pointer;">
+                            <i class="fas fa-sign-out-alt"></i>
+                            Logout
+                        </button>
+                    </form>
+                {% else %}
+                    <a href="/" class="back-btn">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to Upload
+                    </a>
+                {% endif %}
+            </div>
         </div>
     </header>
 

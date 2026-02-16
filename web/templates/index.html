@@ -1241,9 +1241,25 @@
                     <li><a href="#features">Features</a></li>
                     <li><a href="#upload">Upload</a></li>
                     <li><a href="#about">About</a></li>
-                        </ul>
+                    {% if user %}
+                        <li><a href="/history">My Analyses</a></li>
+                        <li style="display:flex;align-items:center;gap:8px;">
+                            <span style="font-size:0.9rem;color:#7f8c8d;">Hi, {{ user.full_name or user.email }}</span>
+                        </li>
+                        <li>
+                            <form method="post" action="/logout" style="margin:0;">
+                                <button type="submit" style="border:none;background:#f1f3f5;color:#495057;border-radius:999px;padding:0.4rem 0.9rem;font-size:0.8rem;font-weight:600;cursor:pointer;">
+                                    <i class="fas fa-sign-out-alt"></i> Logout
+                                </button>
+                            </form>
+                        </li>
+                    {% else %}
+                        <li><a href="/login">Login</a></li>
+                        <li><a href="/signup">Sign up</a></li>
+                    {% endif %}
+                </ul>
             </nav>
-                    </div>
+        </div>
     </header>
 
     <!-- Hero Section -->
