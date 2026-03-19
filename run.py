@@ -10,6 +10,9 @@ import sys
 import os
 import traceback
 
+# Force non-interactive matplotlib backend BEFORE anything imports matplotlib.
+os.environ["MPLBACKEND"] = "Agg"
+
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
