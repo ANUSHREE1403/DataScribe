@@ -9,17 +9,8 @@ import json
 from typing import Optional, List
 import shutil
 from datetime import datetime
-import pandas as pd
 
-# Import DataScribe components
-try:
-    from core.eda_engine import run_eda
-    from core.visualization_engine import generate_visualizations
-    CORE_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: Core components not available: {e}")
-    CORE_AVAILABLE = False
-
+# ---------- lightweight imports only at startup ----------
 from utils.config import settings
 from web.auth import (
     AnalysisJob,
@@ -31,26 +22,46 @@ from web.auth import (
     get_db,
 )
 
-# Report generation imports
-try:
-    from reportlab.lib.pagesizes import letter, A4
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    REPORTLAB_AVAILABLE = True
-except ImportError:
-    REPORTLAB_AVAILABLE = False
+# ---------- heavy libraries are loaded lazily on first analysis ----------
+pd = None
+run_eda = None
+generate_visualizations = None
+CORE_AVAILABLE = None
+REPORTLAB_AVAILABLE = None
+OPENPYXL_AVAILABLE = None
 
-try:
-    import openpyxl
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils.dataframe import dataframe_to_rows
-    OPENPYXL_AVAILABLE = True
-except ImportError:
-    OPENPYXL_AVAILABLE = False
+def _ensure_heavy_imports():
+    """Import pandas, core engines, reportlab, openpyxl on first use."""
+    global pd, run_eda, generate_visualizations
+    global CORE_AVAILABLE, REPORTLAB_AVAILABLE, OPENPYXL_AVAILABLE
+
+    if pd is not None:
+        return
+
+    import pandas as _pd
+    pd = _pd
+
+    try:
+        from core.eda_engine import run_eda as _run_eda
+        from core.visualization_engine import generate_visualizations as _gen_viz
+        run_eda = _run_eda
+        generate_visualizations = _gen_viz
+        CORE_AVAILABLE = True
+    except ImportError as e:
+        print(f"Warning: Core components not available: {e}")
+        CORE_AVAILABLE = False
+
+    try:
+        import reportlab  # noqa: F401
+        REPORTLAB_AVAILABLE = True
+    except ImportError:
+        REPORTLAB_AVAILABLE = False
+
+    try:
+        import openpyxl  # noqa: F401
+        OPENPYXL_AVAILABLE = True
+    except ImportError:
+        OPENPYXL_AVAILABLE = False
 
 app = FastAPI(
     title=settings.app_name,
@@ -78,8 +89,8 @@ jobs = {}
 def load_dataset(file: UploadFile):
     """Load dataset from uploaded file"""
     try:
-        import pandas as pd
-        
+        _ensure_heavy_imports()
+
         if file.filename.endswith('.csv'):
             df = pd.read_csv(file.file)
         elif file.filename.endswith(('.xlsx', '.xls')):
@@ -189,6 +200,8 @@ async def analyze_dataset(
     include_python_code: bool = Form(False)
 ):
     """Analyze uploaded dataset"""
+    _ensure_heavy_imports()
+
     try:
         user = get_current_user(request, db)
     except Exception as db_err:
@@ -1233,10 +1246,15 @@ def generate_html_report(job: dict) -> str:
 
 def generate_excel_report(job: dict, job_id: str) -> str:
     """Generate Excel report"""
+    _ensure_heavy_imports()
     if not OPENPYXL_AVAILABLE:
         return None
     
     try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils.dataframe import dataframe_to_rows
+
         analysis_results = job.get("analysis_results", {})
         report_path = os.path.join(settings.reports_dir, f"report_{job_id}.xlsx")
         
@@ -1308,11 +1326,19 @@ def generate_excel_report(job: dict, job_id: str) -> str:
 
 def generate_pdf_report(job: dict, job_id: str) -> str:
     """Generate PDF report with website-matching design"""
+    _ensure_heavy_imports()
     if not REPORTLAB_AVAILABLE:
         print("ReportLab not available for PDF generation")
         return None
     
     try:
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
         print(f"Starting PDF generation for job {job_id}")
         analysis_results = job.get("analysis_results", {})
         visualizations = job.get("visualizations", {})
@@ -1798,6 +1824,7 @@ async def download_html_report(job_id: str):
 @app.get("/download/{job_id}/report/excel")
 async def download_excel_report(job_id: str):
     """Download Excel analysis report"""
+    _ensure_heavy_imports()
     if not OPENPYXL_AVAILABLE:
         raise HTTPException(
             status_code=500, 
@@ -1824,6 +1851,7 @@ async def download_excel_report(job_id: str):
 @app.get("/download/{job_id}/report/pdf")
 async def download_pdf_report(job_id: str):
     """Download PDF analysis report"""
+    _ensure_heavy_imports()
     print(f"PDF download requested for job: {job_id}")
     
     if not REPORTLAB_AVAILABLE:
@@ -1903,8 +1931,8 @@ async def health_check():
         "version": settings.app_version,
         "active_jobs": len([j for j in jobs.values() if j["status"] == "completed"]),
         "report_generation": {
-            "pdf": REPORTLAB_AVAILABLE,
-            "excel": OPENPYXL_AVAILABLE,
+            "pdf": REPORTLAB_AVAILABLE or False,
+            "excel": OPENPYXL_AVAILABLE or False,
             "html": True
         }
     }
