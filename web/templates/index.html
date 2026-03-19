@@ -1224,7 +1224,7 @@
         <div class="floating-element"></div>
         <div class="floating-element"></div>
         <div class="floating-element"></div>
-        </div>
+    </div>
     <div class="particles" id="particles"></div>
 
     <!-- Header -->
@@ -1241,6 +1241,7 @@
                     <li><a href="#features">Features</a></li>
                     <li><a href="#upload">Upload</a></li>
                     <li><a href="#about">About</a></li>
+                    <li><a href="javascript:void(0);" onclick="openVersionModal()">DataScribe v1 vs v2</a></li>
                     {% if user %}
                         <li><a href="/history">My Analyses</a></li>
                         <li style="display:flex;align-items:center;gap:8px;">
@@ -1267,6 +1268,49 @@
         {{ error }}
     </div>
     {% endif %}
+
+    <!-- Version Info Modal -->
+    <div id="versionModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:#ffffff; max-width:520px; width:90%; border-radius:16px; box-shadow:0 18px 45px rgba(0,0,0,0.35); padding:24px 28px; position:relative;">
+            <button type="button" onclick="closeVersionModal()" style="position:absolute; top:14px; right:16px; border:none; background:transparent; font-size:1.1rem; cursor:pointer; color:#95a5a6;">
+                <i class="fas fa-times"></i>
+            </button>
+            <h2 style="margin-bottom:8px; font-size:1.4rem; font-weight:800; color:#2c3e50;">
+                DataScribe Versions
+            </h2>
+            <p style="margin-bottom:16px; font-size:0.95rem; color:#7f8c8d;">
+                A quick overview of how DataScribe evolved from v1 to v2.
+            </p>
+            <div style="display:flex; flex-direction:column; gap:16px; font-size:0.95rem;">
+                <div style="padding:12px 14px; border-radius:10px; background:#f8f9fa; border:1px solid #e3e6ea;">
+                    <h3 style="margin-bottom:6px; font-size:1.05rem; font-weight:700; color:#2c3e50;">
+                        DataScribe v1
+                    </h3>
+                    <ul style="margin-left:18px; color:#4b5563;">
+                        <li>Single‑session automated EDA without authentication.</li>
+                        <li>Core statistical summaries and basic visual insights per upload.</li>
+                        <li>No persistent history or user‑specific tracking of analyses.</li>
+                    </ul>
+                </div>
+                <div style="padding:12px 14px; border-radius:10px; background:#eef7ff; border:1px solid #d0e3ff;">
+                    <h3 style="margin-bottom:6px; font-size:1.05rem; font-weight:700; color:#1f3b57;">
+                        DataScribe v2
+                    </h3>
+                    <ul style="margin-left:18px; color:#334155;">
+                        <li>Secure login/signup with password hashing and session management.</li>
+                        <li>Per‑user analysis history stored in the database for easy revisiting.</li>
+                        <li>Refined visualization and EDA pipeline for clearer, more focused insights.</li>
+                        <li>Optional integrated baseline ML models and richer, user‑friendly error feedback.</li>
+                    </ul>
+                </div>
+            </div>
+            <div style="margin-top:18px; text-align:right;">
+                <button type="button" onclick="closeVersionModal()" style="border:none; background:#3498db; color:#ffffff; padding:0.6rem 1.4rem; border-radius:999px; font-weight:600; cursor:pointer;">
+                    Got it
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Hero Section -->
     <section class="hero">
