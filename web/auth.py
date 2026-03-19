@@ -16,19 +16,33 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
 
 from utils.config import settings
 
+# ---------------------------------------------------------------------------
 # Database configuration
+# Try the configured URL first; fall back to local SQLite if it fails.
+# ---------------------------------------------------------------------------
+_FALLBACK_SQLITE = "sqlite:///./datascribe.db"
 DATABASE_URL = os.getenv("DATABASE_URL", settings.database_url)
 
-# Render/Railway often give URLs starting with postgres://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-if DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(
-        DATABASE_URL, connect_args={"check_same_thread": False}
-    )
-else:
-    engine = create_engine(DATABASE_URL)
+
+def _make_engine(url: str):
+    if url.startswith("sqlite"):
+        return create_engine(url, connect_args={"check_same_thread": False})
+    return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=0)
+
+
+try:
+    engine = _make_engine(DATABASE_URL)
+    # Quick connectivity test (no tables yet, just a connection)
+    with engine.connect() as _conn:
+        pass
+    print(f"Database connected: {DATABASE_URL[:40]}...")
+except Exception as db_err:
+    print(f"WARNING: Could not connect to database ({db_err}). Falling back to local SQLite.")
+    DATABASE_URL = _FALLBACK_SQLITE
+    engine = _make_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -62,8 +76,11 @@ class AnalysisJob(Base):
     user = relationship("User", back_populates="analyses")
 
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Create tables (safe: only creates if they don't already exist)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"WARNING: Could not create tables: {e}")
 
 
 # Password hashing
@@ -152,4 +169,3 @@ def get_current_user(request, db: Session):
     if not user_id:
         return None
     return db.query(User).filter(User.id == user_id).first()
-
