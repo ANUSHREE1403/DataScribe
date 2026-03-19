@@ -71,15 +71,18 @@ def load_dataset(file: UploadFile):
         if file.filename.endswith(".csv"):
             df = pd.read_csv(file.file)
         elif file.filename.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(file.file)
-        elif file.filename.endswith(".parquet"):
-            df = pd.read_parquet(file.file)
+            try:
+                df = pd.read_excel(file.file)
+            except ImportError:
+                raise ValueError("Excel support not available. Please upload a CSV file instead.")
         else:
-            raise ValueError("Unsupported file format")
+            raise ValueError("Unsupported file format. Please upload a CSV file.")
 
         df = df.dropna(how="all")
         df = df.dropna(axis=1, how="all")
         return df
+    except ValueError:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error loading dataset: {e}")
 

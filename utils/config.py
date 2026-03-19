@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"
     reports_dir: str = "reports"
     max_file_size: int = 100 * 1024 * 1024  # 100MB
-    allowed_extensions: List[str] = [".csv", ".xlsx", ".xls", ".parquet"]
+    allowed_extensions: List[str] = [".csv", ".xlsx", ".xls"]
     
     # EDA Configuration
     max_rows_for_analysis: int = 100000
