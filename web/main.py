@@ -657,6 +657,24 @@ def _get_job_or_404(job_id: str) -> Dict[str, Any]:
     raise HTTPException(status_code=404, detail="Job not found")
 
 
+def _render_template(request: Request, name: str, context: Dict[str, Any], status_code: int = 200):
+    """
+    Compatibility wrapper for Starlette/FastAPI TemplateResponse signatures.
+    Supports both:
+      - TemplateResponse(name, context, status_code=...)
+      - TemplateResponse(request=request, name=..., context=..., status_code=...)
+    """
+    try:
+        return templates.TemplateResponse(
+            request=request,
+            name=name,
+            context=context,
+            status_code=status_code,
+        )
+    except TypeError:
+        return templates.TemplateResponse(name, context, status_code=status_code)
+
+
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
@@ -668,11 +686,7 @@ async def home(request: Request, db=Depends(get_db)):
     except Exception:
         user = None
     error = request.query_params.get("error", "")
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={"request": request, "user": user, "error": error},
-    )
+    return _render_template(request, "index.html", {"request": request, "user": user, "error": error})
 
 
 @app.get("/signup", response_class=HTMLResponse)
@@ -680,11 +694,7 @@ async def signup_get(request: Request, db=Depends(get_db)):
     user = get_current_user(request, db)
     if user:
         return RedirectResponse(url="/", status_code=303)
-    return templates.TemplateResponse(
-        request=request,
-        name="signup.html",
-        context={"request": request, "message": None},
-    )
+    return _render_template(request, "signup.html", {"request": request, "message": None})
 
 
 @app.post("/signup", response_class=HTMLResponse)
@@ -703,11 +713,7 @@ async def signup_post(
         request.session["user_id"] = user.id
         return RedirectResponse(url="/", status_code=303)
     except ValueError as e:
-        return templates.TemplateResponse(
-            request=request,
-            name="signup.html",
-            context={"request": request, "message": str(e)},
-        )
+        return _render_template(request, "signup.html", {"request": request, "message": str(e)})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -715,11 +721,7 @@ async def login_get(request: Request, db=Depends(get_db)):
     user = get_current_user(request, db)
     if user:
         return RedirectResponse(url="/", status_code=303)
-    return templates.TemplateResponse(
-        request=request,
-        name="login.html",
-        context={"request": request, "message": None},
-    )
+    return _render_template(request, "login.html", {"request": request, "message": None})
 
 
 @app.post("/login", response_class=HTMLResponse)
@@ -731,10 +733,10 @@ async def login_post(
 ):
     user = authenticate_user(db, email=email.strip().lower(), password=password)
     if not user:
-        return templates.TemplateResponse(
-            request=request,
-            name="login.html",
-            context={
+        return _render_template(
+            request,
+            "login.html",
+            {
                 "request": request,
                 "message": "Invalid email or password. On free hosting, accounts may reset after redeploys — try signing up again.",
             },
@@ -935,16 +937,12 @@ async def get_results(request: Request, job_id: str, db=Depends(get_db)):
     user = get_current_user(request, db)
     job = _get_job_or_404(job_id)
     if job["status"] == "failed":
-        return templates.TemplateResponse(
-            request=request,
-            name="error.html",
-            context={"request": request, "error": job.get("error", "Unknown error")},
-        )
+        return _render_template(request, "error.html", {"request": request, "error": job.get("error", "Unknown error")})
 
-    return templates.TemplateResponse(
-        request=request,
-        name="results.html",
-        context={"request": request, "job": job, "analysis_results": job["analysis_results"], "user": user},
+    return _render_template(
+        request,
+        "results.html",
+        {"request": request, "job": job, "analysis_results": job["analysis_results"], "user": user},
     )
 
 
@@ -1018,8 +1016,4 @@ async def history(request: Request, db=Depends(get_db)):
         .order_by(AnalysisJob.created_at.desc())
         .all()
     )
-    return templates.TemplateResponse(
-        request=request,
-        name="history.html",
-        context={"request": request, "user": user, "analyses": analyses},
-    )
+    return _render_template(request, "history.html", {"request": request, "user": user, "analyses": analyses})
