@@ -84,10 +84,9 @@ except Exception as e:
 
 
 # Password hashing
-# Support both schemes: new signups use pbkdf2 (no 72-byte limit);
-# users who signed up when we used bcrypt can still log in.
+# Use pbkdf2_sha256 only (stable on current dependency set, no bcrypt backend issues).
 pwd_context = CryptContext(
-    schemes=["pbkdf2_sha256", "bcrypt"],
+    schemes=["pbkdf2_sha256"],
     deprecated="auto",
 )
 
@@ -107,7 +106,21 @@ def get_password_hash(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # Preferred path for current hashes.
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        # Backward-compatibility: older deployments may still have bcrypt hashes.
+        # Newer bcrypt wheels enforce 72-byte limit; truncate for legacy verify only.
+        if isinstance(hashed_password, str) and hashed_password.startswith("$2"):
+            try:
+                import bcrypt
+
+                candidate = (plain_password or "").encode("utf-8")[:72]
+                return bcrypt.checkpw(candidate, hashed_password.encode("utf-8"))
+            except Exception:
+                return False
+        return False
 
 
 def get_user_by_email(db: Session, email: str):

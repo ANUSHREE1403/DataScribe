@@ -15,6 +15,7 @@ if __name__ == "__main__":
     use_reload = False if os.environ.get("PORT") else settings.reload
 
     print(f"Starting {settings.app_name} v{settings.app_version}")
+    print("Build marker: TEMPLATE_COMPAT_2026_05_05")
     print(f"Server: http://{host}:{port}")
     print("=" * 50)
 
