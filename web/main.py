@@ -169,6 +169,15 @@ def _safe_name(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", text).strip("_")[:80] or "dataset"
 
 
+def _json_safe(obj: Any) -> Any:
+    """Convert nested objects into JSON-safe structures (stringify non-primitive dict keys)."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def _write_pdf_report(job_id: str, job: Dict[str, Any]) -> str:
     """Create a downloadable PDF report with summary + generated charts."""
     try:
@@ -205,9 +214,16 @@ def _write_pdf_report(job_id: str, job: Dict[str, Any]) -> str:
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
 
-        # Add all generated plot images to PDF
+        # Add generated plot images to PDF.
+        # On constrained hosts (e.g. Render free), keep this lightweight.
+        include_plots = True
+        max_plots = 999
+        if os.environ.get("PORT"):
+            max_plots = 2
+
         job_static_dir = os.path.join("static", "jobs", job_id)
-        if os.path.isdir(job_static_dir):
+        if include_plots and os.path.isdir(job_static_dir):
+            added = 0
             for name in sorted(os.listdir(job_static_dir)):
                 if not name.lower().endswith(".png"):
                     continue
@@ -222,6 +238,9 @@ def _write_pdf_report(job_id: str, job: Dict[str, Any]) -> str:
                 ax.imshow(img)
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close(fig)
+                added += 1
+                if added >= max_plots:
+                    break
 
     return report_path
 
@@ -629,7 +648,7 @@ def _save_job_artifact(job_id: str, job: Dict[str, Any], db=None) -> None:
     try:
         os.makedirs(settings.reports_dir, exist_ok=True)
         with open(_job_meta_path(job_id), "w", encoding="utf-8") as f:
-            json.dump(job, f, indent=2, default=str)
+            json.dump(_json_safe(job), f, indent=2, default=str)
     except Exception as e:
         _log(job_id, f"Could not save job artifact: {e}")
     # Optional DB persistence (survives process memory reset when DB is persistent)
@@ -637,7 +656,7 @@ def _save_job_artifact(job_id: str, job: Dict[str, Any], db=None) -> None:
         try:
             row = db.query(AnalysisJob).filter(AnalysisJob.job_id == job_id).first()
             if row:
-                row.notes = json.dumps(job, default=str)
+                row.notes = json.dumps(_json_safe(job), default=str)
                 db.commit()
         except Exception as e:
             _log(job_id, f"Could not save job artifact to DB notes: {e}")
