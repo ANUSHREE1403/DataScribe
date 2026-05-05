@@ -846,6 +846,16 @@
                         <div class="metric-value">{{ job.ml.target }}</div>
                         <div class="metric-label">Target Variable</div>
                     </div>
+                    {% if job.ml.task == 'regression' %}
+                    <div class="metric-card">
+                        <div class="metric-value">{{ '%.4f'|format(job.ml.r2) if job.ml.r2 is not none else 'N/A' }}</div>
+                        <div class="metric-label">R² Score</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{{ '%.4f'|format(job.ml.rmse) if job.ml.rmse is not none else 'N/A' }}</div>
+                        <div class="metric-label">RMSE</div>
+                    </div>
+                    {% else %}
                     <div class="metric-card">
                         <div class="metric-value">{{ '%.2f'|format(job.ml.accuracy * 100) if job.ml.accuracy else 'N/A' }}%</div>
                         <div class="metric-label">Accuracy</div>
@@ -868,10 +878,11 @@
                         <div class="metric-label">ROC-AUC</div>
                     </div>
                     {% endif %}
+                    {% endif %}
                 </div>
 
                 <!-- Cross-Validation Results -->
-                {% if job.ml.cv_mean %}
+                {% if job.ml.cv_mean and job.ml.task != 'regression' %}
                 <div style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); padding: 2rem; border-radius: 16px; margin: 2rem 0; border: 2px solid rgba(46, 204, 113, 0.3);">
                     <h4 style="color: #27ae60; margin-top: 0; display: flex; align-items: center; gap: 10px;">
                         <i class="fas fa-check-circle"></i> Cross-Validation (5-Fold)
@@ -884,7 +895,7 @@
                 {% endif %}
 
                 <!-- Confusion Matrix -->
-                {% if job.ml.confusion_matrix_url %}
+                {% if job.ml.confusion_matrix_url and job.ml.task != 'regression' %}
                 <div class="visualization">
                     <h4>Confusion Matrix</h4>
                     <img src="{{ job.ml.confusion_matrix_url }}" alt="Confusion Matrix" style="max-width: 600px;">
