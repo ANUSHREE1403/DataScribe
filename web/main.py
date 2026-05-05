@@ -332,6 +332,69 @@ def _generate_job_visualizations(df, analysis_results: Dict[str, Any], target_co
     return plot_urls
 
 
+def _generate_basic_visualizations(df, target_column: Optional[str], job_id: str) -> Dict[str, str]:
+    """
+    Render-friendly fallback visualizations (1-2 lightweight charts) for any dataset.
+    Generates:
+      - missingness bar chart
+      - histogram for first numeric column (if present)
+    """
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import pandas as _pd
+    except Exception as e:
+        _log(job_id, f"Basic visualization fallback unavailable: {e}")
+        return {}
+
+    job_static_dir = os.path.join("static", "jobs", job_id)
+    os.makedirs(job_static_dir, exist_ok=True)
+    urls: Dict[str, str] = {}
+
+    # 1) Missing values chart (works for any dataset)
+    try:
+        missing = df.isnull().sum().sort_values(ascending=False)
+        if missing.sum() > 0:
+            fig, ax = plt.subplots(figsize=(8, 4))
+            missing.head(20).plot(kind="bar", ax=ax, color="#3498db")
+            ax.set_title("Missing values by column")
+            ax.set_ylabel("Count")
+            ax.set_xlabel("Columns")
+            fig.tight_layout()
+            out = os.path.join(job_static_dir, "basic_missing_values.png")
+            fig.savefig(out, bbox_inches="tight")
+            plt.close(fig)
+            urls["basic_missing_values"] = f"/static/jobs/{job_id}/basic_missing_values.png"
+    except Exception as e:
+        _log(job_id, f"Failed missing-values fallback chart: {e}")
+
+    # 2) First numeric histogram
+    try:
+        num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        if num_cols:
+            col = num_cols[0]
+            ser = _pd.to_numeric(df[col], errors="coerce").dropna()
+            if not ser.empty:
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.hist(ser, bins=30, color="#2ecc71", alpha=0.85)
+                ax.set_title(f"Distribution: {col}")
+                ax.set_xlabel(str(col))
+                ax.set_ylabel("Frequency")
+                fig.tight_layout()
+                out = os.path.join(job_static_dir, "basic_numeric_distribution.png")
+                fig.savefig(out, bbox_inches="tight")
+                plt.close(fig)
+                urls["basic_numeric_distribution"] = f"/static/jobs/{job_id}/basic_numeric_distribution.png"
+    except Exception as e:
+        _log(job_id, f"Failed numeric fallback chart: {e}")
+
+    if urls:
+        _log(job_id, f"Basic visualization fallback generated {len(urls)} plots.")
+    return urls
+
+
 def _train_baseline_model(df, target_column: str, job_id: str) -> Dict[str, Any]:
     """Train a robust baseline model and return UI-friendly metrics payload."""
     result: Dict[str, Any] = {"enabled": True, "target": target_column}
@@ -558,6 +621,42 @@ def _choose_target_column(df, requested_target: Optional[str], train_model: bool
     return requested_target
 
 
+def _job_meta_path(job_id: str) -> str:
+    return os.path.join(settings.reports_dir, f"job_{job_id}.json")
+
+
+def _save_job_artifact(job_id: str, job: Dict[str, Any]) -> None:
+    try:
+        os.makedirs(settings.reports_dir, exist_ok=True)
+        with open(_job_meta_path(job_id), "w", encoding="utf-8") as f:
+            json.dump(job, f, indent=2, default=str)
+    except Exception as e:
+        _log(job_id, f"Could not save job artifact: {e}")
+
+
+def _load_job_artifact(job_id: str) -> Optional[Dict[str, Any]]:
+    path = _job_meta_path(job_id)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def _get_job_or_404(job_id: str) -> Dict[str, Any]:
+    job = jobs.get(job_id)
+    if job:
+        return job
+    disk_job = _load_job_artifact(job_id)
+    if disk_job:
+        jobs[job_id] = disk_job
+        return disk_job
+    raise HTTPException(status_code=404, detail="Job not found")
+
+
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
@@ -758,8 +857,12 @@ async def analyze_dataset(
         if include_plots:
             try:
                 visualization_urls = _generate_job_visualizations(df, analysis_results, target_column, job_id)
+                if not visualization_urls:
+                    _log(job_id, "Primary visualization engine returned no plots; using basic fallback plots.")
+                    visualization_urls = _generate_basic_visualizations(df, target_column, job_id)
             except Exception as vis_err:
                 _log(job_id, f"Visualization generation failed: {vis_err}")
+                visualization_urls = _generate_basic_visualizations(df, target_column, job_id)
         else:
             _log(job_id, "Visualization generation skipped (include_plots disabled).")
 
@@ -791,6 +894,7 @@ async def analyze_dataset(
         }
         _log(job_id, f"Job complete. visuals={len(visualization_urls)} ml={'yes' if ml_result else 'no'}")
         jobs[job_id]["processing_logs"] = job_logs.get(job_id, [])
+        _save_job_artifact(job_id, jobs[job_id])
 
         ml_accuracy = None
         if isinstance(ml_result, dict):
@@ -829,10 +933,7 @@ async def analyze_dataset(
 @app.get("/results/{job_id}")
 async def get_results(request: Request, job_id: str, db=Depends(get_db)):
     user = get_current_user(request, db)
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    job = jobs[job_id]
+    job = _get_job_or_404(job_id)
     if job["status"] == "failed":
         return templates.TemplateResponse(
             request=request,
@@ -849,9 +950,8 @@ async def get_results(request: Request, job_id: str, db=Depends(get_db)):
 
 @app.get("/download/{job_id}/dataset")
 async def download_dataset(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    dataset_path = jobs[job_id].get("dataset_path")
+    job = _get_job_or_404(job_id)
+    dataset_path = job.get("dataset_path")
     if not dataset_path or not os.path.exists(dataset_path):
         raise HTTPException(status_code=404, detail="Dataset file not found")
     return FileResponse(dataset_path, media_type="text/csv", filename=f"DataScribe_{job_id}.csv")
@@ -859,9 +959,7 @@ async def download_dataset(job_id: str):
 
 @app.get("/download/{job_id}/report/html")
 async def download_html_report(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job = jobs[job_id]
+    job = _get_job_or_404(job_id)
     html_content = generate_html_report(job)
     report_path = os.path.join(settings.reports_dir, f"report_{job_id}.html")
     with open(report_path, "w", encoding="utf-8") as f:
@@ -871,9 +969,7 @@ async def download_html_report(job_id: str):
 
 @app.get("/download/{job_id}/report/pdf")
 async def download_pdf_report(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job = jobs[job_id]
+    job = _get_job_or_404(job_id)
     _log(job_id, "Preparing PDF download.")
     report_path = _write_pdf_report(job_id, job)
     dataset_label = _safe_name(str(job.get("filename", job_id)))
@@ -882,9 +978,7 @@ async def download_pdf_report(job_id: str):
 
 @app.get("/download/{job_id}/report/excel")
 async def download_excel_report(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job = jobs[job_id]
+    job = _get_job_or_404(job_id)
     _log(job_id, "Preparing Excel download.")
     report_path = _write_excel_report(job_id, job)
     dataset_label = _safe_name(str(job.get("filename", job_id)))
@@ -897,9 +991,7 @@ async def download_excel_report(job_id: str):
 
 @app.get("/download/{job_id}/code/r")
 async def download_r_code(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job = jobs[job_id]
+    job = _get_job_or_404(job_id)
     _log(job_id, "Preparing R code download.")
     r_path = _write_r_code(job_id, job)
     dataset_label = _safe_name(str(job.get("filename", job_id)))
