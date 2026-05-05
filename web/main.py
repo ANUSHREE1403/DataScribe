@@ -245,60 +245,76 @@ def _write_pdf_report(job_id: str, job: Dict[str, Any]) -> str:
     return report_path
 
 
-def _write_excel_report(job_id: str, job: Dict[str, Any]) -> str:
-    """Create a downloadable Excel report with key tables."""
+def _write_excel_report(job_id: str, job: Dict[str, Any]) -> tuple[str, str, str]:
+    """Create a downloadable Excel report with key tables; fallback to CSV if openpyxl missing."""
     if pd is None:
         _ensure_heavy_imports()
     report_path = os.path.join(settings.reports_dir, f"report_{job_id}.xlsx")
     analysis = job.get("analysis_results", {}) or {}
     dataset_path = job.get("dataset_path")
 
-    with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
-        overview = analysis.get("overview", {}) or {}
-        quality = analysis.get("data_quality", {}) or {}
-        insights = analysis.get("insights", {}) or {}
+    overview = analysis.get("overview", {}) or {}
+    quality = analysis.get("data_quality", {}) or {}
+    insights = analysis.get("insights", {}) or {}
+    summary_df = pd.DataFrame(
+        [
+            {"metric": "rows", "value": (overview.get("shape") or [None, None])[0]},
+            {"metric": "columns", "value": (overview.get("shape") or [None, None])[1]},
+            {"metric": "memory_mb", "value": overview.get("memory_usage")},
+            {"metric": "quality_score", "value": quality.get("data_quality_score")},
+            {"metric": "total_missing", "value": (quality.get("missing_values") or {}).get("total_missing")},
+            {"metric": "duplicates", "value": (quality.get("duplicates") or {}).get("count")},
+        ]
+    )
 
-        summary_df = pd.DataFrame(
-            [
-                {"metric": "rows", "value": (overview.get("shape") or [None, None])[0]},
-                {"metric": "columns", "value": (overview.get("shape") or [None, None])[1]},
-                {"metric": "memory_mb", "value": overview.get("memory_usage")},
-                {"metric": "quality_score", "value": quality.get("data_quality_score")},
-                {"metric": "total_missing", "value": (quality.get("missing_values") or {}).get("total_missing")},
-                {"metric": "duplicates", "value": (quality.get("duplicates") or {}).get("count")},
-            ]
+    try:
+        import openpyxl  # noqa: F401
+        with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
+            summary_df.to_excel(writer, sheet_name="summary", index=False)
+
+            stats = analysis.get("statistics", {}) or {}
+            if "numerical" in stats and isinstance(stats["numerical"], dict):
+                try:
+                    numeric_df = pd.DataFrame(stats["numerical"])
+                    numeric_df.to_excel(writer, sheet_name="numeric_stats", index=True)
+                except Exception:
+                    pass
+
+            insight_rows = []
+            for key, vals in insights.items():
+                if isinstance(vals, list):
+                    for v in vals:
+                        insight_rows.append({"category": key, "insight": str(v)})
+            if insight_rows:
+                pd.DataFrame(insight_rows).to_excel(writer, sheet_name="insights", index=False)
+
+            if dataset_path and os.path.exists(dataset_path):
+                try:
+                    preview = pd.read_csv(dataset_path).head(5000)
+                    preview.to_excel(writer, sheet_name="dataset_preview", index=False)
+                except Exception:
+                    pass
+
+            ml = job.get("ml")
+            if isinstance(ml, dict):
+                ml_rows = [{"key": k, "value": str(v)} for k, v in ml.items()]
+                pd.DataFrame(ml_rows).to_excel(writer, sheet_name="ml", index=False)
+
+        return (
+            report_path,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            f"DataScribe_Report_{_safe_name(str(job.get('filename', job_id)))}.xlsx",
         )
-        summary_df.to_excel(writer, sheet_name="summary", index=False)
-
-        stats = analysis.get("statistics", {}) or {}
-        if "numerical" in stats and isinstance(stats["numerical"], dict):
-            try:
-                numeric_df = pd.DataFrame(stats["numerical"])
-                numeric_df.to_excel(writer, sheet_name="numeric_stats", index=True)
-            except Exception:
-                pass
-
-        insight_rows = []
-        for key, vals in insights.items():
-            if isinstance(vals, list):
-                for v in vals:
-                    insight_rows.append({"category": key, "insight": str(v)})
-        if insight_rows:
-            pd.DataFrame(insight_rows).to_excel(writer, sheet_name="insights", index=False)
-
-        if dataset_path and os.path.exists(dataset_path):
-            try:
-                preview = pd.read_csv(dataset_path).head(5000)
-                preview.to_excel(writer, sheet_name="dataset_preview", index=False)
-            except Exception:
-                pass
-
-        ml = job.get("ml")
-        if isinstance(ml, dict):
-            ml_rows = [{"key": k, "value": str(v)} for k, v in ml.items()]
-            pd.DataFrame(ml_rows).to_excel(writer, sheet_name="ml", index=False)
-
-    return report_path
+    except Exception as e:
+        # Fallback: always provide downloadable CSV if Excel dependency fails.
+        _log(job_id, f"Excel writer unavailable ({e}); falling back to CSV summary.")
+        fallback_path = os.path.join(settings.reports_dir, f"report_{job_id}_excel_fallback.csv")
+        summary_df.to_csv(fallback_path, index=False)
+        return (
+            fallback_path,
+            "text/csv",
+            f"DataScribe_Report_{_safe_name(str(job.get('filename', job_id)))}_fallback.csv",
+        )
 
 
 def _write_r_code(job_id: str, job: Dict[str, Any]) -> str:
@@ -1009,21 +1025,28 @@ async def download_html_report(job_id: str, db=Depends(get_db)):
 async def download_pdf_report(job_id: str, db=Depends(get_db)):
     job = _get_job_or_404(job_id, db=db)
     _log(job_id, "Preparing PDF download.")
-    report_path = _write_pdf_report(job_id, job)
     dataset_label = _safe_name(str(job.get("filename", job_id)))
-    return FileResponse(report_path, media_type="application/pdf", filename=f"DataScribe_Report_{dataset_label}.pdf")
+    try:
+        report_path = _write_pdf_report(job_id, job)
+        return FileResponse(report_path, media_type="application/pdf", filename=f"DataScribe_Report_{dataset_label}.pdf")
+    except Exception as e:
+        _log(job_id, f"PDF generation failed: {e}; falling back to HTML report download.")
+        html_content = generate_html_report(job)
+        html_path = os.path.join(settings.reports_dir, f"report_{job_id}_pdf_fallback.html")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        return FileResponse(html_path, media_type="text/html", filename=f"DataScribe_Report_{dataset_label}_fallback.html")
 
 
 @app.get("/download/{job_id}/report/excel")
 async def download_excel_report(job_id: str, db=Depends(get_db)):
     job = _get_job_or_404(job_id, db=db)
     _log(job_id, "Preparing Excel download.")
-    report_path = _write_excel_report(job_id, job)
-    dataset_label = _safe_name(str(job.get("filename", job_id)))
+    report_path, media_type, download_name = _write_excel_report(job_id, job)
     return FileResponse(
         report_path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=f"DataScribe_Report_{dataset_label}.xlsx",
+        media_type=media_type,
+        filename=download_name,
     )
 
 
