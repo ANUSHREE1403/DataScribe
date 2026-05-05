@@ -169,6 +169,15 @@ def _safe_name(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", text).strip("_")[:80] or "dataset"
 
 
+def _json_safe(obj: Any) -> Any:
+    """Convert nested objects into JSON-safe structures (stringify non-primitive dict keys)."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def _write_pdf_report(job_id: str, job: Dict[str, Any]) -> str:
     """Create a downloadable PDF report with summary + generated charts."""
     try:
@@ -205,9 +214,16 @@ def _write_pdf_report(job_id: str, job: Dict[str, Any]) -> str:
         pdf.savefig(fig, bbox_inches="tight")
         plt.close(fig)
 
-        # Add all generated plot images to PDF
+        # Add generated plot images to PDF.
+        # On constrained hosts (e.g. Render free), keep this lightweight.
+        include_plots = True
+        max_plots = 999
+        if os.environ.get("PORT"):
+            max_plots = 2
+
         job_static_dir = os.path.join("static", "jobs", job_id)
-        if os.path.isdir(job_static_dir):
+        if include_plots and os.path.isdir(job_static_dir):
+            added = 0
             for name in sorted(os.listdir(job_static_dir)):
                 if not name.lower().endswith(".png"):
                     continue
@@ -222,6 +238,9 @@ def _write_pdf_report(job_id: str, job: Dict[str, Any]) -> str:
                 ax.imshow(img)
                 pdf.savefig(fig, bbox_inches="tight")
                 plt.close(fig)
+                added += 1
+                if added >= max_plots:
+                    break
 
     return report_path
 
@@ -625,32 +644,53 @@ def _job_meta_path(job_id: str) -> str:
     return os.path.join(settings.reports_dir, f"job_{job_id}.json")
 
 
-def _save_job_artifact(job_id: str, job: Dict[str, Any]) -> None:
+def _save_job_artifact(job_id: str, job: Dict[str, Any], db=None) -> None:
     try:
         os.makedirs(settings.reports_dir, exist_ok=True)
         with open(_job_meta_path(job_id), "w", encoding="utf-8") as f:
-            json.dump(job, f, indent=2, default=str)
+            json.dump(_json_safe(job), f, indent=2, default=str)
     except Exception as e:
         _log(job_id, f"Could not save job artifact: {e}")
+    # Optional DB persistence (survives process memory reset when DB is persistent)
+    if db is not None:
+        try:
+            row = db.query(AnalysisJob).filter(AnalysisJob.job_id == job_id).first()
+            if row:
+                row.notes = json.dumps(_json_safe(job), default=str)
+                db.commit()
+        except Exception as e:
+            _log(job_id, f"Could not save job artifact to DB notes: {e}")
 
 
-def _load_job_artifact(job_id: str) -> Optional[Dict[str, Any]]:
+def _load_job_artifact(job_id: str, db=None) -> Optional[Dict[str, Any]]:
     path = _job_meta_path(job_id)
     if not os.path.exists(path):
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else None
-    except Exception:
-        return None
+        data = None
+    else:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            data = None
+    if db is not None:
+        try:
+            row = db.query(AnalysisJob).filter(AnalysisJob.job_id == job_id).first()
+            if row and row.notes:
+                from_db = json.loads(row.notes)
+                if isinstance(from_db, dict):
+                    return from_db
+        except Exception:
+            pass
+    return None
 
 
-def _get_job_or_404(job_id: str) -> Dict[str, Any]:
+def _get_job_or_404(job_id: str, db=None) -> Dict[str, Any]:
     job = jobs.get(job_id)
     if job:
         return job
-    disk_job = _load_job_artifact(job_id)
+    disk_job = _load_job_artifact(job_id, db=db)
     if disk_job:
         jobs[job_id] = disk_job
         return disk_job
@@ -896,7 +936,7 @@ async def analyze_dataset(
         }
         _log(job_id, f"Job complete. visuals={len(visualization_urls)} ml={'yes' if ml_result else 'no'}")
         jobs[job_id]["processing_logs"] = job_logs.get(job_id, [])
-        _save_job_artifact(job_id, jobs[job_id])
+        _save_job_artifact(job_id, jobs[job_id], db=db)
 
         ml_accuracy = None
         if isinstance(ml_result, dict):
@@ -935,7 +975,7 @@ async def analyze_dataset(
 @app.get("/results/{job_id}")
 async def get_results(request: Request, job_id: str, db=Depends(get_db)):
     user = get_current_user(request, db)
-    job = _get_job_or_404(job_id)
+    job = _get_job_or_404(job_id, db=db)
     if job["status"] == "failed":
         return _render_template(request, "error.html", {"request": request, "error": job.get("error", "Unknown error")})
 
@@ -947,8 +987,8 @@ async def get_results(request: Request, job_id: str, db=Depends(get_db)):
 
 
 @app.get("/download/{job_id}/dataset")
-async def download_dataset(job_id: str):
-    job = _get_job_or_404(job_id)
+async def download_dataset(job_id: str, db=Depends(get_db)):
+    job = _get_job_or_404(job_id, db=db)
     dataset_path = job.get("dataset_path")
     if not dataset_path or not os.path.exists(dataset_path):
         raise HTTPException(status_code=404, detail="Dataset file not found")
@@ -956,8 +996,8 @@ async def download_dataset(job_id: str):
 
 
 @app.get("/download/{job_id}/report/html")
-async def download_html_report(job_id: str):
-    job = _get_job_or_404(job_id)
+async def download_html_report(job_id: str, db=Depends(get_db)):
+    job = _get_job_or_404(job_id, db=db)
     html_content = generate_html_report(job)
     report_path = os.path.join(settings.reports_dir, f"report_{job_id}.html")
     with open(report_path, "w", encoding="utf-8") as f:
@@ -966,8 +1006,8 @@ async def download_html_report(job_id: str):
 
 
 @app.get("/download/{job_id}/report/pdf")
-async def download_pdf_report(job_id: str):
-    job = _get_job_or_404(job_id)
+async def download_pdf_report(job_id: str, db=Depends(get_db)):
+    job = _get_job_or_404(job_id, db=db)
     _log(job_id, "Preparing PDF download.")
     report_path = _write_pdf_report(job_id, job)
     dataset_label = _safe_name(str(job.get("filename", job_id)))
@@ -975,8 +1015,8 @@ async def download_pdf_report(job_id: str):
 
 
 @app.get("/download/{job_id}/report/excel")
-async def download_excel_report(job_id: str):
-    job = _get_job_or_404(job_id)
+async def download_excel_report(job_id: str, db=Depends(get_db)):
+    job = _get_job_or_404(job_id, db=db)
     _log(job_id, "Preparing Excel download.")
     report_path = _write_excel_report(job_id, job)
     dataset_label = _safe_name(str(job.get("filename", job_id)))
@@ -988,8 +1028,8 @@ async def download_excel_report(job_id: str):
 
 
 @app.get("/download/{job_id}/code/r")
-async def download_r_code(job_id: str):
-    job = _get_job_or_404(job_id)
+async def download_r_code(job_id: str, db=Depends(get_db)):
+    job = _get_job_or_404(job_id, db=db)
     _log(job_id, "Preparing R code download.")
     r_path = _write_r_code(job_id, job)
     dataset_label = _safe_name(str(job.get("filename", job_id)))
