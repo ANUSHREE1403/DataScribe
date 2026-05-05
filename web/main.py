@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 from utils.config import settings
+from utils.logging_utils import get_logger
 from web.auth import (
     AnalysisJob,
     authenticate_user,
@@ -70,6 +71,8 @@ os.makedirs(settings.upload_dir, exist_ok=True)
 os.makedirs(settings.reports_dir, exist_ok=True)
 
 jobs = {}
+job_logs: Dict[str, list[str]] = {}
+logger = get_logger("datascribe.web", os.path.join(settings.reports_dir, "datascribe_web.log"))
 
 
 # ---------------------------------------------------------------------------
@@ -145,12 +148,21 @@ body{{font-family:Arial,sans-serif;margin:40px;color:#2c3e50}}
                 html += f"<li>{item}</li>"
             html += "</ul>"
 
+    logs = job.get("processing_logs", []) or []
+    if logs:
+        html += "<div class='section'><h2>Processing Logs</h2><pre style='white-space:pre-wrap;background:#f8f9fa;padding:12px;border-radius:8px;'>"
+        html += "\n".join([str(x) for x in logs[-200:]])
+        html += "</pre></div>"
     html += "</ul></div></body></html>"
     return html
 
 
 def _log(job_id: str, message: str) -> None:
-    print(f"[DataScribe][{job_id}] {message}")
+    line = f"[DataScribe][{job_id}] {message}"
+    logger.info(line)
+    if job_id not in job_logs:
+        job_logs[job_id] = []
+    job_logs[job_id].append(line)
 
 
 def _safe_name(text: str) -> str:
@@ -775,8 +787,10 @@ async def analyze_dataset(
             "filename": original_filename,
             "created_at": datetime.now().isoformat(),
             "ml": ml_result,
+            "processing_logs": job_logs.get(job_id, []),
         }
         _log(job_id, f"Job complete. visuals={len(visualization_urls)} ml={'yes' if ml_result else 'no'}")
+        jobs[job_id]["processing_logs"] = job_logs.get(job_id, [])
 
         ml_accuracy = None
         if isinstance(ml_result, dict):

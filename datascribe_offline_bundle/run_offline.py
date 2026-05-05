@@ -19,6 +19,16 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from utils.logging_utils import get_logger
+
+logger = get_logger("datascribe.offline", os.path.join(str(Path(__file__).resolve().parents[1]), "reports", "datascribe_offline.log"))
+RUN_LOGS: list[str] = []
+
+
+def _log(message: str) -> None:
+    logger.info(message)
+    RUN_LOGS.append(message)
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -100,7 +110,12 @@ def _safe_dumps(obj: object) -> str:
     return json.dumps(_json_safe(obj), indent=2, default=str)
 
 
-def build_html_report(job: dict, charts_rel_paths: list[str] | None = None, ml_result: dict | None = None) -> str:
+def build_html_report(
+    job: dict,
+    charts_rel_paths: list[str] | None = None,
+    ml_result: dict | None = None,
+    processing_logs: list[str] | None = None,
+) -> str:
     """Offline HTML report: analysis + charts + ML (when available)."""
     analysis_results = job.get("analysis_results", {})
     overview = analysis_results.get("overview", {})
@@ -273,6 +288,10 @@ a.btn.secondary{{background:#6b7280}}
     html += "<div class='section'><h2>Full Analysis JSON</h2>"
     html += "<details><summary>Open full `analysis_results` payload</summary>"
     html += f"<pre>{_html_escape(_safe_dumps(analysis_results))}</pre></details></div>"
+
+    if processing_logs:
+        html += "<div class='section'><h2>Processing Logs</h2>"
+        html += f"<pre>{_html_escape(chr(10).join(processing_logs[-300:]))}</pre></div>"
 
     html += "</ul></div></body></html>"
     return html
@@ -571,6 +590,7 @@ def main() -> int:
         help="Train a baseline Random Forest (needs --target; uses scikit-learn).",
     )
     args = parser.parse_args()
+    _log(f"Offline run started. train={args.train}, target={args.target}, no_charts={args.no_charts}")
 
     bundle = _bundle_dir()
     default_in = bundle / "input" / "sample_titanic.csv"
@@ -585,18 +605,23 @@ def main() -> int:
     ensure_repo_on_path()
     from core.eda_engine import run_eda
 
+    _log(f"Loading input file: {in_path}")
     raw = load_raw_csv(in_path)
     raw_shape = tuple(raw.shape)
+    _log(f"Loaded dataset shape: {raw_shape}")
     cleaned = clean_like_datascribe(
         raw,
         max_rows=args.max_rows,
         max_cols=args.max_cols,
         target_column=args.target,
     )
+    _log(f"Cleaned dataset shape: {tuple(cleaned.shape)}")
     cleaned_path = out_dir / "cleaned_dataset.csv"
     cleaned.to_csv(cleaned_path, index=False)
+    _log(f"Wrote cleaned dataset: {cleaned_path}")
 
     analysis_results = run_eda(cleaned, args.target)
+    _log("EDA analysis complete.")
     created = datetime.now(timezone.utc).isoformat()
     job = {
         "job_id": "offline-bundle",
@@ -611,16 +636,20 @@ def main() -> int:
         try:
             plot_map = run_chart_generation(cleaned, analysis_results, args.target, charts_dir)
             dashboard_path = write_charts_dashboard(charts_dir, created)
+            _log(f"Generated charts: {len(plot_map)} entries")
         except Exception as e:
             plot_map = {"error": str(e)}
+            _log(f"Chart generation failed: {e}")
 
     pdf_path = out_dir / "report.pdf"
     ml_result: dict | None = None
     if args.train:
         if not args.target:
             ml_result = {"enabled": False, "error": "--train requires --target COLUMN"}
+            _log("ML requested without target column.")
         else:
             ml_result = run_baseline_ml(cleaned, args.target, charts_dir)
+            _log(f"ML step completed. error={ml_result.get('error') if isinstance(ml_result, dict) else None}")
 
     pdf_ok = write_report_pdf(
         pdf_path,
@@ -635,7 +664,10 @@ def main() -> int:
         charts_rel_paths = [f"charts/{p.name}" for p in sorted(charts_dir.iterdir()) if p.suffix.lower() == ".png"]
 
     html_path = out_dir / "report.html"
-    html_path.write_text(build_html_report(job, charts_rel_paths=charts_rel_paths, ml_result=ml_result), encoding="utf-8")
+    html_path.write_text(
+        build_html_report(job, charts_rel_paths=charts_rel_paths, ml_result=ml_result, processing_logs=RUN_LOGS),
+        encoding="utf-8",
+    )
 
     manifest = {
         "datascribe_repo_root": str(_repo_root()),
@@ -664,6 +696,7 @@ def main() -> int:
         "pdf_written": pdf_ok,
         "charts_generated": not args.no_charts and "error" not in plot_map,
         "ml_training": ml_result,
+        "processing_logs": RUN_LOGS,
     }
     if not pdf_ok:
         manifest["pdf_note"] = "matplotlib not installed; install requirements or `pip install matplotlib` for PDF."
@@ -676,6 +709,7 @@ def main() -> int:
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, default=str), encoding="utf-8"
     )
+    (out_dir / "processing_logs.json").write_text(json.dumps(RUN_LOGS, indent=2), encoding="utf-8")
 
     print("DataScribe offline run complete.")
     print(f"  Cleaned CSV: {cleaned_path}")

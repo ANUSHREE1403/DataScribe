@@ -5,7 +5,7 @@ import os
 class Settings(BaseSettings):
     # App Configuration
     app_name: str = "DataScribe"
-    app_subtitle: str = "Democratizing Data Analysis: Automated EDA with Human-Readable Insights"
+    app_subtitle: str = "Automated EDA with human-readable insights and practical recommendations"
     app_version: str = "1.0.0"
     debug: bool = False
     
