@@ -656,6 +656,58 @@ def _choose_target_column(df, requested_target: Optional[str], train_model: bool
     return requested_target
 
 
+def _resolve_target_aliases(df, requested_target: Optional[str], job_id: str) -> Optional[str]:
+    """
+    Resolve user-entered target names against real columns and common aliases.
+    Also creates derived 'Sales' when possible for the sales sample dataset.
+    """
+    if not requested_target:
+        return requested_target
+
+    req = requested_target.strip()
+    if not req:
+        return None
+
+    # Case-insensitive direct match
+    for c in df.columns:
+        if str(c).strip().lower() == req.lower():
+            if c != requested_target:
+                _log(job_id, f"Mapped requested target '{requested_target}' to actual column '{c}'.")
+            return str(c)
+
+    col_map = {str(c).strip().lower(): str(c) for c in df.columns}
+
+    # Common financial aliases
+    if req.lower() == "sales":
+        # Create derived Sales if quantity + unit price exist
+        q_col = col_map.get("quantity ordered")
+        p_col = col_map.get("price each")
+        if q_col and p_col:
+            try:
+                df["Sales"] = pd.to_numeric(df[q_col], errors="coerce").fillna(0) * pd.to_numeric(
+                    df[p_col], errors="coerce"
+                ).fillna(0)
+                _log(job_id, "Created derived target column 'Sales' = Quantity Ordered * Price Each.")
+                return "Sales"
+            except Exception as e:
+                _log(job_id, f"Could not derive 'Sales' column: {e}")
+
+        for fallback in ("net amount", "gross amount", "quantity ordered"):
+            if fallback in col_map:
+                mapped = col_map[fallback]
+                _log(job_id, f"Mapped requested target 'Sales' to '{mapped}'.")
+                return mapped
+
+    if req.lower() in ("profit", "revenue", "amount"):
+        for fallback in ("net amount", "gross amount"):
+            if fallback in col_map:
+                mapped = col_map[fallback]
+                _log(job_id, f"Mapped requested target '{requested_target}' to '{mapped}'.")
+                return mapped
+
+    return requested_target
+
+
 def _job_meta_path(job_id: str) -> str:
     return os.path.join(settings.reports_dir, f"job_{job_id}.json")
 
@@ -902,6 +954,7 @@ async def analyze_dataset(
         df = load_dataset(file)
         _log(job_id, f"Loaded dataset shape: {df.shape}")
 
+        target_column = _resolve_target_aliases(df, target_column, job_id)
         target_column = _choose_target_column(df, target_column, train_model, job_id)
         _log(job_id, f"Target column in use: {target_column}")
 

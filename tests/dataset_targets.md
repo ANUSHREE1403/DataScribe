@@ -10,5 +10,6 @@
      - `Profit`
 
 3. **Sales Analysis (Electronics Store)**  
-   - Target column: `Sales`
+   - Preferred target column: `Sales` (auto-derived by app as `Quantity Ordered * Price Each`)  
+   - You can also choose: `Quantity Ordered`
 
