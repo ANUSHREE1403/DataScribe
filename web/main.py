@@ -1207,14 +1207,23 @@ async def health_check():
 
 
 @app.get("/history", response_class=HTMLResponse)
-async def history(request: Request, db=Depends(get_db)):
+async def history(request: Request, page: int = 1, page_size: int = 10, db=Depends(get_db)):
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
+    page_size = max(5, min(int(page_size or 10), 50))
+    page = max(1, int(page or 1))
+
+    base_q = db.query(AnalysisJob).filter(AnalysisJob.user_id == user.id)
+    total_items = base_q.count()
+    total_pages = max(1, (total_items + page_size - 1) // page_size)
+    if page > total_pages:
+        page = total_pages
+
     rows = (
-        db.query(AnalysisJob)
-        .filter(AnalysisJob.user_id == user.id)
-        .order_by(AnalysisJob.created_at.desc())
+        base_q.order_by(AnalysisJob.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
 
@@ -1247,4 +1256,16 @@ async def history(request: Request, db=Depends(get_db)):
             }
         )
 
-    return _render_template(request, "history.html", {"request": request, "user": user, "analyses": analyses})
+    return _render_template(
+        request,
+        "history.html",
+        {
+            "request": request,
+            "user": user,
+            "analyses": analyses,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "total_items": total_items,
+        },
+    )

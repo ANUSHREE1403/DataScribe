@@ -236,6 +236,19 @@
             transition: transform 0.3s ease;
         }
 
+        .logo-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo-link:hover .brand-title {
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 4px;
+        }
+
         .logo:hover {
             transform: scale(1.05);
         }
@@ -1231,10 +1244,12 @@
     <header class="header" id="header">
         <div class="header-content">
             <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-chart-line"></i>
-                </div>
-                <div class="brand-title">DataScribe</div>
+                <a class="logo-link" href="/">
+                    <div class="logo-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="brand-title">DataScribe</div>
+                </a>
             </div>
             <nav>
                 <ul class="nav-links">

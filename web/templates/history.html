@@ -33,6 +33,17 @@
             align-items: center;
             gap: 10px;
         }
+        .logo-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+        .logo-link:hover .brand-title {
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 4px;
+        }
         .logo-icon {
             width: 40px;
             height: 40px;
@@ -161,10 +172,12 @@
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-chart-line"></i>
-                </div>
-                <div class="brand-title">DataScribe</div>
+                <a class="logo-link" href="/">
+                    <div class="logo-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="brand-title">DataScribe</div>
+                </a>
             </div>
             <div class="user-info">
                 {% if user %}
@@ -232,6 +245,28 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {% if total_pages and total_pages > 1 %}
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:#fff;border-top:1px solid #e9ecef;">
+                <div style="color:#7f8c8d;font-size:0.85rem;">
+                    Page <strong style="color:#2c3e50;">{{ page }}</strong> of <strong style="color:#2c3e50;">{{ total_pages }}</strong>
+                    {% if total_items is defined %}
+                        · <strong style="color:#2c3e50;">{{ total_items }}</strong> total
+                    {% endif %}
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+                    {% if page > 1 %}
+                        <a class="link" href="/history?page={{ page - 1 }}&page_size={{ page_size }}">← Prev</a>
+                    {% else %}
+                        <span class="badge badge-missing">← Prev</span>
+                    {% endif %}
+                    {% if page < total_pages %}
+                        <a class="link" href="/history?page={{ page + 1 }}&page_size={{ page_size }}">Next →</a>
+                    {% else %}
+                        <span class="badge badge-missing">Next →</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
             {% else %}
             <div class="empty-state">
                 No analyses saved yet. <a href="/">Run your first analysis</a>.
