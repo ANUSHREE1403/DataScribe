@@ -1,302 +1,179 @@
-# DataScribe
+# DataScribe (Simple Guide)
 
-**Democratizing Data Analysis: Automated EDA with Human-Readable Insights**
+DataScribe helps you analyze a dataset quickly and get easy-to-read outputs like:
+- data quality checks,
+- summaries,
+- charts,
+- reports.
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+It supports:
+- login/signup,
+- dataset upload from browser,
+- automatic EDA,
+- visualizations,
+- optional ML training,
+- downloadable report files.
 
-## 🚀 Overview
+## What this project has
 
-DataScribe is an AI-powered Exploratory Data Analysis (EDA) platform that automates the entire data analysis workflow. It transforms raw datasets into comprehensive, human-readable insights with beautiful visualizations, machine learning capabilities, and actionable recommendations.
+There are 2 main ways to use DataScribe:
 
-## ✨ Features
+1. **Web app mode** (login + upload file in browser)  
+   Run with: `python run.py`
 
-### Core Analysis Features
-- **📊 Automated EDA**: Comprehensive data analysis with configurable sections
-- **🔍 Data Quality Assessment**: Missing values, duplicates, outliers detection with quality scoring
-- **📈 Smart Visualizations**: Univariate, bivariate, and multivariate analysis plots
-- **📋 Report Generation**: HTML, PDF, and Excel export capabilities
-- **🎯 Target Analysis**: Optional target variable analysis for ML tasks
-- **💡 AI Insights**: Automated recommendations and data quality scoring
+2. **Offline bundle mode** (all outputs in one folder, no web UI needed)  
+   Run with: `python datascribe_offline_bundle/run_offline.py ...`
 
-### Machine Learning Capabilities
-- **🤖 ML Model Training**: Train multiple ML models with auto-selection
-- **📊 Model Evaluation**: Comprehensive metrics (accuracy, precision, recall, F1, ROC-AUC)
-- **📈 Confusion Matrix**: Visual model performance assessment
-- **🔄 Cross-Validation**: K-fold validation with mean ± std scores
-- **🎯 Feature Importance**: Top features and coefficients analysis
-- **📋 Model Comparison**: Auto-select best performing model from:
-  - Logistic Regression
-  - Random Forest
-  - XGBoost
-  - LightGBM
-  - SVM (Support Vector Machine)
-  - KNN (K-Nearest Neighbors)
+If you want complete files in one place (CSV + charts + HTML + PDF + ML JSON), use the offline bundle.
 
-### User Experience
-- **🎨 Modern UI/UX**: Professional, responsive design with animations
-- **📱 Mobile-Friendly**: Optimized for all device sizes
-- **⚡ Fast Processing**: Optimized engine for quick analysis
-- **📊 Interactive Results**: Rich visualizations and detailed metrics
-- **💾 Multiple Formats**: Export in PDF, Excel, HTML, and R code
+## Quick Start (Beginner)
 
-### Authentication & History (Sem 8)
-- **🔐 Login & Sign Up**: User accounts with email and password (bcrypt)
-- **🔒 Protected Analysis**: Only logged-in users can run analyses
-- **📜 My Analyses**: Per-user history of past analyses (dataset, target, model, accuracy)
-- **🗄️ Database**: SQLite for local development; PostgreSQL for deployment (optional)
+### 1) Open terminal in project folder
 
-## 🏗️ Project Structure
-
-```
-datascribe/
-├── 📁 core/                    # Core EDA engine and analysis
-├── 📁 web/                     # Web application and API
-├── 📁 reports/                 # Report generation and templates
-├── 📁 utils/                   # Utility functions and helpers
-├── 📁 tests/                   # Test suite and examples
-├── 📁 docs/                    # Documentation and guides
-├── 📁 examples/                # Sample datasets and demos
-└── 📁 deployment/              # Deployment configurations
+```bash
+cd path/to/DataScribe
 ```
 
-## 🚀 Quick Start
+### 2) Install requirements
 
-### Prerequisites
-- Python 3.8+
-- pip or conda
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/ANUSHREE1403/DataScribe.git
-   cd DataScribe
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Run the application**
-   ```bash
-   python run.py
-   ```
-
-4. **Open your browser**
-   Navigate to `http://localhost:8000`
-
-## 📖 Usage
-
-### Web Interface
-1. **Sign up** or **log in** (required to run analyses)
-2. Upload your dataset (CSV, Excel, Parquet)
-3. Configure analysis options:
-   - Target column (optional, for supervised ML)
-   - Visualization preferences
-   - ML model training (optional)
-   - Model selection (Auto, Logistic Regression, Random Forest, XGBoost, LightGBM, SVM, KNN)
-4. Run the analysis
-5. View comprehensive results including:
-   - Data quality assessment
-   - Statistical summaries
-   - Interactive visualizations
-   - ML model performance metrics
-   - Confusion matrix
-   - Feature importance
-6. Download reports in multiple formats or open **My Analyses** to see past runs
-
-### API Usage
-The `/analyze` endpoint requires a logged-in session. Use a session (cookies) after logging in via `/login`.
-
-```python
-import requests
-
-# Create session and log in first
-session = requests.Session()
-session.post('http://localhost:8000/login', data={'email': 'your@email.com', 'password': 'yourpassword'})
-
-# Upload and analyze dataset with ML training
-files = {'file': open('dataset.csv', 'rb')}
-data = {
-    'target_column': 'target',
-    'include_plots': True,
-    'include_reports': True,
-    'train_model': True,
-    'model_choice': 'auto'  # or specific model like 'rf', 'xgboost', etc.
-}
-
-response = session.post('http://localhost:8000/analyze', files=files, data=data, allow_redirects=True)
-# On success you are redirected to /results/{job_id}; extract job_id from the final URL if needed
-job_id = response.url.split('/results/')[-1].split('?')[0] if '/results/' in response.url else None
-
-# Get analysis results (use same session)
-results = session.get(f'http://localhost:8000/results/{job_id}')
-
-# Download reports (use same session)
-pdf_report = session.get(f'http://localhost:8000/download/{job_id}/report/pdf')
-excel_report = session.get(f'http://localhost:8000/download/{job_id}/report/excel')
-html_report = session.get(f'http://localhost:8000/download/{job_id}/report/html')
-r_code = session.get(f'http://localhost:8000/download/{job_id}/code/r')
+```bash
+pip install -r requirements.txt
 ```
 
-## 🔧 Configuration
+### 3) Start the web app
 
-Create a `.env` file in the root directory (optional; defaults work for local use):
-
-```env
-# App Configuration
-APP_NAME=DataScribe
-DEBUG=False
-
-# Authentication (required for production; use a long random string)
-SECRET_KEY=your-secret-key-change-in-production
-
-# Database
-# Local: uses SQLite (datascribe.db) by default
-# Production: set DATABASE_URL to your PostgreSQL connection string
-# DATABASE_URL=postgresql://user:password@host:5432/dbname
-
-# File Storage
-UPLOAD_DIR=uploads
-REPORTS_DIR=reports
-MAX_FILE_SIZE=100MB
-
-# EDA Settings
-MAX_ROWS_FOR_ANALYSIS=100000
-CORRELATION_THRESHOLD=0.7
+```bash
+python run.py
 ```
 
-## 📊 Supported Data Formats
+Now open: `http://localhost:8000`
 
-- **CSV** (.csv)
-- **Excel** (.xlsx, .xls)
-- **Parquet** (.parquet)
+## How to use the web app
 
-Example datasets and suggested target columns (Titanic, Ecommerce, Sales) are listed in [tests/dataset_targets.md](tests/dataset_targets.md).
+1. Sign up / log in.
+2. Upload CSV or Excel file.
+3. (Optional) set target column.
+4. Run analysis.
+5. View results and download available report files.
 
-## 🎨 Visualization Features
+Download buttons available on results page:
+- PDF report
+- Excel report
+- HTML report
+- R code
+- processed dataset CSV
 
-- **Dataset Overview**: Data types, missing values, column distributions
-- **Data Quality**: Missing values heatmap, quality scoring
-- **Univariate Analysis**: Histograms, distributions, outlier detection
-- **Bivariate Analysis**: Correlation matrices, feature relationships
-- **Multivariate Analysis**: PCA, feature importance
-- **Target Analysis**: Classification/regression target insights
-- **ML Results**: Confusion matrix, feature importance plots, model performance charts
+## Offline bundle (recommended for full output package)
 
-## 📈 Report Types
+This folder gives you all outputs in one clean place:
 
-### HTML Reports
-- Interactive, responsive design
-- Embedded visualizations
-- Professional styling
-- Mobile-friendly
+`datascribe_offline_bundle/`
 
-### PDF Reports
-- Print-ready format
-- High-quality graphics
-- Professional appearance
-- Easy sharing
+Run this:
 
-### Excel Reports
-- Multiple worksheets
-- Structured data
-- Formatted tables
-- Business-friendly
+```bash
+python datascribe_offline_bundle/run_offline.py --target Survived --train
+```
 
-## 🤝 Contributing
+You will get files inside:
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+`datascribe_offline_bundle/output/`
 
-### Development Setup
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+Main output files:
+- `cleaned_dataset.csv`
+- `report.html`
+- `report.pdf`
+- `charts/` (PNG chart files)
+- `charts_dashboard.html`
+- `ml_results.json` (if `--train`)
+- `manifest.json`
 
-## 🧪 Testing
+For detailed offline steps, read:
+`datascribe_offline_bundle/README.md`
 
-Run the test suite:
+For CD/DVD submission instructions, read:
+`BURN_TO_CD_INSTRUCTIONS.txt`
+
+## Input file formats
+
+- `.csv`
+- `.xlsx`
+- `.xls`
+
+Example datasets are in `tests/`.
+
+## Common commands
+
+### Web app
+
+```bash
+python run.py
+```
+
+### Web app with local URL
+
+After starting, open:
+
+```text
+http://127.0.0.1:8000
+```
+
+### Offline full report with ML
+
+```bash
+python datascribe_offline_bundle/run_offline.py --target Survived --train
+```
+
+### Offline with your own file
+
+```bash
+python datascribe_offline_bundle/run_offline.py --input "C:/mydata/file.csv" --target YourTarget --train
+```
+
+### Run tests
 
 ```bash
 pytest tests/
 ```
 
-## 📚 Documentation
+## Main folders (quick reference)
 
-- [User Guide](docs/user-guide.md)
-- [API Reference](docs/api-reference.md)
-- [Developer Guide](docs/developer-guide.md)
-- [Examples](examples/)
+- `core/` → EDA + chart generation logic
+- `web/` → FastAPI app, auth, templates
+- `utils/` → config + helper functions
+- `tests/` → sample datasets
+- `datascribe_offline_bundle/` → offline all-in-one runner
+- `uploads/` → uploaded dataset snapshots
+- `reports/` → generated download files
 
-## 🚀 Deployment
+## Optional `.env` settings
 
-### Local Development
-```bash
-python run.py
-```
-Uses SQLite (`datascribe.db`) by default. No database setup required.
+You can create a `.env` file in project root.  
+If you skip it, defaults still work locally.
 
-### Render / Railway (Web Service)
-1. Connect your GitHub repo to Render or Railway.
-2. Set **Build Command**: `pip install -r requirements.txt` (or leave default).
-3. Set **Start Command**: `python run.py`.
-4. Add **Environment Variables**:
-   - **SECRET_KEY**: A long random string for session cookies (e.g. generate with `python -c "import secrets; print(secrets.token_hex(32))"`).
-   - **DATABASE_URL** (optional): Your PostgreSQL connection URL if you added a Postgres database. If not set, the app uses SQLite on the server (data may not persist across restarts on free tier).
-5. Deploy; new pushes to your branch will trigger a new deploy.
+Example:
 
-### Production (self-hosted)
-```bash
-gunicorn web.main:app -w 4 -k uvicorn.workers.UvicornWorker
+```env
+APP_NAME=DataScribe
+DEBUG=False
+SECRET_KEY=change-this-in-production
+UPLOAD_DIR=uploads
+REPORTS_DIR=reports
 ```
 
-### Docker
-```bash
-docker build -t datascribe .
-docker run -p 8000:8000 datascribe
-```
+## Deployment (short)
 
-## 📄 License
+- For simple cloud deploy (Render/Railway):
+  - Build command: `pip install -r requirements.txt`
+  - Start command: `python run.py`
+  - Set `SECRET_KEY` in environment variables.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Need help?
 
-## 🙏 Acknowledgments
+- GitHub Issues: [DataScribe Issues](https://github.com/ANUSHREE1403/DataScribe/issues)
+- GitHub Discussions: [DataScribe Discussions](https://github.com/ANUSHREE1403/DataScribe/discussions)
+- Email: `workanushree14@gmail.com`
 
-- Built with [FastAPI](https://fastapi.tiangolo.com/)
-- Visualization powered by [Matplotlib](https://matplotlib.org/) and [Seaborn](https://seaborn.pydata.org/)
-- Data analysis with [Pandas](https://pandas.pydata.org/) and [NumPy](https://numpy.org/)
+## License
 
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/ANUSHREE1403/DataScribe/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/ANUSHREE1403/DataScribe/discussions)
-- **Email**: workanushree14@gmail.com
-
-## 🔮 Roadmap
-
-- [x] Core EDA Engine
-- [x] Visualization System
-- [x] Report Generation
-- [x] Web Interface
-- [x] Machine Learning Integration
-- [x] Modern UI/UX Design
-- [x] Multiple ML Models (LR, RF, XGBoost, LightGBM, SVM, KNN)
-- [x] Comprehensive ML Metrics
-- [x] Professional PDF Reports
-- [x] User Authentication (login / sign up)
-- [x] History Dashboard (My Analyses)
-- [x] Database (SQLite + PostgreSQL support)
-- [x] Cloud Deployment (Render / Railway)
-- [ ] Feedback System
-- [ ] Mobile App
-
----
-
-**Made with ❤️ by the DataScribe Team**
-
-*Democratizing data analysis, one dataset at a time.*
+MIT License. See `LICENSE`.

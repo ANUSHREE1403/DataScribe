@@ -1,0 +1,76 @@
+DataScribe - CD/DVD Submission Instructions
+===========================================
+
+1) What to copy to CD/DVD
+-------------------------
+Copy the full DataScribe project folder (or at minimum these):
+
+- datascribe_offline_bundle/
+- core/
+- web/
+- utils/
+- requirements.txt
+- README.md
+- run.py
+
+Recommended: copy the full folder to avoid missing files.
+
+
+2) Important note before running
+--------------------------------
+CD/DVD is read-only.
+DataScribe needs to create output files.
+
+So first:
+- Copy the DataScribe folder FROM CD/DVD
+- Paste it on local disk (Desktop/Documents)
+- Run from that copied folder
+
+
+3) Easiest demo mode (offline bundle)
+-------------------------------------
+Open terminal in copied DataScribe folder, then run:
+
+    pip install -r requirements.txt
+    cd datascribe_offline_bundle
+    python run.py --target Survived --train
+
+Then open output files:
+- output/report.html
+- output/report.pdf
+- output/charts_dashboard.html
+- output/ml_results.json
+
+
+4) Full web app mode (localhost)
+--------------------------------
+From copied DataScribe folder:
+
+    pip install -r requirements.txt
+    python run.py
+
+Open browser:
+    http://127.0.0.1:8000
+
+Then:
+- Sign up / Login
+- Upload dataset
+- Run analysis
+- View visuals + ML
+- Download PDF/Excel/HTML/R
+
+
+5) If Python is not installed on target PC
+------------------------------------------
+Install Python 3.10+ first, then run:
+
+    pip install -r requirements.txt
+
+
+6) Suggested files to show evaluator
+------------------------------------
+- datascribe_offline_bundle/README.md
+- README.md
+- datascribe_offline_bundle/output/report.pdf
+- datascribe_offline_bundle/output/report.html
+
