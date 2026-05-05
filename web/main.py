@@ -774,32 +774,63 @@ def _download_unavailable_response(file_label: str, job_id: Optional[str] = None
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Download Temporarily Unavailable</title>
+  <title>DataScribe - Download Unavailable</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body{{font-family:Arial,sans-serif;background:#fff5f5;margin:0;padding:24px;color:#2d3748}}
-    .card{{max-width:760px;margin:40px auto;background:#ffffff;border:2px solid #feb2b2;border-radius:14px;padding:24px}}
-    h1{{color:#c53030;margin-top:0}}
-    p{{line-height:1.6}}
-    .muted{{color:#718096;font-size:13px}}
-    .btn{{display:inline-block;background:#c53030;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;margin-right:10px}}
-    .btn.secondary{{background:#2b6cb0}}
+    *{{box-sizing:border-box}}
+    body{{font-family:'Inter',Arial,sans-serif;margin:0;color:#2c3e50;background:#f7f9fc}}
+    .header{{background:#fff;box-shadow:0 2px 20px rgba(0,0,0,.08);padding:14px 0}}
+    .header-inner{{max-width:980px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:space-between}}
+    .brand{{font-weight:800;font-size:1.6rem;background:linear-gradient(135deg,#2c3e50,#3498db);-webkit-background-clip:text;-webkit-text-fill-color:transparent}}
+    .home-link{{text-decoration:none;color:#3498db;font-weight:700}}
+    .wrap{{max-width:980px;margin:30px auto;padding:0 20px}}
+    .card{{background:#fff;border:1px solid rgba(52,152,219,.2);border-radius:18px;box-shadow:0 12px 30px rgba(0,0,0,.08);overflow:hidden}}
+    .banner{{padding:22px 24px;background:linear-gradient(135deg,#ffe9e9,#ffd9d9);border-bottom:1px solid #f2b5b5}}
+    .banner h1{{margin:0;color:#c0392b;font-size:1.9rem;line-height:1.25}}
+    .body{{padding:24px}}
+    p{{line-height:1.75;margin:0 0 12px}}
+    .meta{{margin-top:16px;padding:14px;border-radius:12px;background:#f8f9fa;border:1px solid #e5e7eb;font-size:.95rem}}
+    .meta strong{{color:#2c3e50}}
+    .actions{{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px}}
+    .btn{{display:inline-flex;align-items:center;justify-content:center;padding:11px 16px;border-radius:10px;text-decoration:none;font-weight:700;transition:.2s}}
+    .btn.email{{background:#e74c3c;color:#fff}}
+    .btn.home{{background:#3498db;color:#fff}}
+    .btn:hover{{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.12)}}
+    .muted{{color:#7f8c8d;font-size:.85rem;margin-top:10px}}
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>We are really sorry - this download is temporarily unavailable</h1>
-    <p>
-      You are very close to your goal, and we truly understand how frustrating this feels.
-      Right now, because we are running on Render free tier, large file generation/download can fail due to memory or timeout limits.
-    </p>
-    <p>
-      Please bear with us for now. If you email us, we will be more than happy to help you quickly and share the required file.
-      Thank you so much for your patience and support.
-    </p>
-    <p><strong>Requested file:</strong> {file_label}<br><strong>Job ID:</strong> {safe_job}</p>
-    <a class="btn" href="mailto:workanushree14@gmail.com?subject=DataScribe%20Download%20Help%20-%20{safe_job}&body=Hi%20DataScribe%20team,%0A%0AI%20could%20not%20download%20the%20file%20from%20job%20ID%20{safe_job}.%20Please%20help.%0A%0AThank%20you.">Email Support</a>
-    <a class="btn secondary" href="/">Back to Home</a>
-    <p class="muted">Internal note: {safe_reason}</p>
+  <header class="header">
+    <div class="header-inner">
+      <div class="brand">DataScribe</div>
+      <a class="home-link" href="/">Back to Home</a>
+    </div>
+  </header>
+  <div class="wrap">
+    <div class="card">
+      <div class="banner">
+        <h1>We are really sorry - this download is temporarily unavailable</h1>
+      </div>
+      <div class="body">
+        <p>
+          You are very close to your goal, and we truly understand how frustrating this feels.
+          Right now, because we are running on Render free tier, large file generation/download can fail due to memory or timeout limits.
+        </p>
+        <p>
+          Please bear with us for now. If you email us, we will be more than happy to help you quickly and share the required file.
+          Thank you so much for your patience and support.
+        </p>
+        <div class="meta">
+          <div><strong>Requested file:</strong> {file_label}</div>
+          <div><strong>Job ID:</strong> {safe_job}</div>
+        </div>
+        <div class="actions">
+          <a class="btn email" href="mailto:workanushree14@gmail.com?subject=DataScribe%20Download%20Help%20-%20{safe_job}&body=Hi%20DataScribe%20team,%0A%0AI%20could%20not%20download%20the%20file%20from%20job%20ID%20{safe_job}.%20Please%20help.%0A%0AThank%20you.">Email Support</a>
+          <a class="btn home" href="/">Back to Home</a>
+        </div>
+        <div class="muted">Internal note: {safe_reason}</div>
+      </div>
+    </div>
   </div>
 </body>
 </html>"""
