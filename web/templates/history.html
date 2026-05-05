@@ -192,7 +192,7 @@
                         <th>Dataset</th>
                         <th>Target</th>
                         <th>Model</th>
-                        <th>Accuracy</th>
+                        <th>ML Metric</th>
                         <th>Report</th>
                     </tr>
                 </thead>
@@ -204,10 +204,23 @@
                         <td>{{ item.target_column or "-" }}</td>
                         <td>{{ item.model_choice or "-" }}</td>
                         <td>
-                            {% if item.accuracy is not none %}
-                                <span class="badge badge-ok">{{ '%.2f'|format(item.accuracy * 100) }}%</span>
+                            {% if item.ml_task == 'regression' %}
+                                {% if item.rmse is not none %}
+                                    <span class="badge badge-ok">RMSE: {{ '%.4f'|format(item.rmse) }}</span>
+                                {% else %}
+                                    <span class="badge badge-missing">RMSE: N/A</span>
+                                {% endif %}
+                                {% if item.r2 is not none %}
+                                    <span class="badge badge-ok" style="margin-left:0.35rem;">R²: {{ '%.4f'|format(item.r2) }}</span>
+                                {% else %}
+                                    <span class="badge badge-missing" style="margin-left:0.35rem;">R²: N/A</span>
+                                {% endif %}
                             {% else %}
-                                <span class="badge badge-missing">N/A</span>
+                                {% if item.accuracy is not none %}
+                                    <span class="badge badge-ok">{{ '%.2f'|format(item.accuracy * 100) }}%</span>
+                                {% else %}
+                                    <span class="badge badge-missing">N/A</span>
+                                {% endif %}
                             {% endif %}
                         </td>
                         <td>
