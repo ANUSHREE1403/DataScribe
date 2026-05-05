@@ -592,7 +592,8 @@ def _train_baseline_model(df, target_column: str, job_id: str) -> Dict[str, Any]
     X_train, X_test, y_train, y_test = train_test_split(X, y_num, test_size=0.2, random_state=42)
     pipe.fit(X_train, y_train)
     preds = pipe.predict(X_test)
-    rmse = float(mean_squared_error(y_test, preds, squared=False))
+    # Version-safe RMSE: avoid relying on `squared` kwarg availability.
+    rmse = float(np.sqrt(mean_squared_error(y_test, preds)))
     result.update(
         {
             "model_name": "Random Forest Regressor",
@@ -1210,10 +1211,40 @@ async def history(request: Request, db=Depends(get_db)):
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
-    analyses = (
+    rows = (
         db.query(AnalysisJob)
         .filter(AnalysisJob.user_id == user.id)
         .order_by(AnalysisJob.created_at.desc())
         .all()
     )
+
+    analyses: List[Dict[str, Any]] = []
+    for row in rows:
+        ml = None
+        if row.notes:
+            try:
+                payload = json.loads(row.notes)
+                if isinstance(payload, dict):
+                    ml = payload.get("ml")
+            except Exception:
+                ml = None
+
+        ml_task = None
+        if isinstance(ml, dict):
+            ml_task = ml.get("task")
+
+        analyses.append(
+            {
+                "job_id": row.job_id,
+                "created_at": row.created_at,
+                "dataset_name": row.dataset_name,
+                "target_column": row.target_column,
+                "model_choice": row.model_choice,
+                "ml_task": ml_task,
+                "accuracy": float(ml.get("accuracy")) if isinstance(ml, dict) and ml.get("accuracy") is not None else row.accuracy,
+                "rmse": float(ml.get("rmse")) if isinstance(ml, dict) and ml.get("rmse") is not None else None,
+                "r2": float(ml.get("r2")) if isinstance(ml, dict) and ml.get("r2") is not None else None,
+            }
+        )
+
     return _render_template(request, "history.html", {"request": request, "user": user, "analyses": analyses})
