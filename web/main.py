@@ -245,60 +245,76 @@ def _write_pdf_report(job_id: str, job: Dict[str, Any]) -> str:
     return report_path
 
 
-def _write_excel_report(job_id: str, job: Dict[str, Any]) -> str:
-    """Create a downloadable Excel report with key tables."""
+def _write_excel_report(job_id: str, job: Dict[str, Any]) -> tuple[str, str, str]:
+    """Create a downloadable Excel report with key tables; fallback to CSV if openpyxl missing."""
     if pd is None:
         _ensure_heavy_imports()
     report_path = os.path.join(settings.reports_dir, f"report_{job_id}.xlsx")
     analysis = job.get("analysis_results", {}) or {}
     dataset_path = job.get("dataset_path")
 
-    with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
-        overview = analysis.get("overview", {}) or {}
-        quality = analysis.get("data_quality", {}) or {}
-        insights = analysis.get("insights", {}) or {}
+    overview = analysis.get("overview", {}) or {}
+    quality = analysis.get("data_quality", {}) or {}
+    insights = analysis.get("insights", {}) or {}
+    summary_df = pd.DataFrame(
+        [
+            {"metric": "rows", "value": (overview.get("shape") or [None, None])[0]},
+            {"metric": "columns", "value": (overview.get("shape") or [None, None])[1]},
+            {"metric": "memory_mb", "value": overview.get("memory_usage")},
+            {"metric": "quality_score", "value": quality.get("data_quality_score")},
+            {"metric": "total_missing", "value": (quality.get("missing_values") or {}).get("total_missing")},
+            {"metric": "duplicates", "value": (quality.get("duplicates") or {}).get("count")},
+        ]
+    )
 
-        summary_df = pd.DataFrame(
-            [
-                {"metric": "rows", "value": (overview.get("shape") or [None, None])[0]},
-                {"metric": "columns", "value": (overview.get("shape") or [None, None])[1]},
-                {"metric": "memory_mb", "value": overview.get("memory_usage")},
-                {"metric": "quality_score", "value": quality.get("data_quality_score")},
-                {"metric": "total_missing", "value": (quality.get("missing_values") or {}).get("total_missing")},
-                {"metric": "duplicates", "value": (quality.get("duplicates") or {}).get("count")},
-            ]
+    try:
+        import openpyxl  # noqa: F401
+        with pd.ExcelWriter(report_path, engine="openpyxl") as writer:
+            summary_df.to_excel(writer, sheet_name="summary", index=False)
+
+            stats = analysis.get("statistics", {}) or {}
+            if "numerical" in stats and isinstance(stats["numerical"], dict):
+                try:
+                    numeric_df = pd.DataFrame(stats["numerical"])
+                    numeric_df.to_excel(writer, sheet_name="numeric_stats", index=True)
+                except Exception:
+                    pass
+
+            insight_rows = []
+            for key, vals in insights.items():
+                if isinstance(vals, list):
+                    for v in vals:
+                        insight_rows.append({"category": key, "insight": str(v)})
+            if insight_rows:
+                pd.DataFrame(insight_rows).to_excel(writer, sheet_name="insights", index=False)
+
+            if dataset_path and os.path.exists(dataset_path):
+                try:
+                    preview = pd.read_csv(dataset_path).head(5000)
+                    preview.to_excel(writer, sheet_name="dataset_preview", index=False)
+                except Exception:
+                    pass
+
+            ml = job.get("ml")
+            if isinstance(ml, dict):
+                ml_rows = [{"key": k, "value": str(v)} for k, v in ml.items()]
+                pd.DataFrame(ml_rows).to_excel(writer, sheet_name="ml", index=False)
+
+        return (
+            report_path,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            f"DataScribe_Report_{_safe_name(str(job.get('filename', job_id)))}.xlsx",
         )
-        summary_df.to_excel(writer, sheet_name="summary", index=False)
-
-        stats = analysis.get("statistics", {}) or {}
-        if "numerical" in stats and isinstance(stats["numerical"], dict):
-            try:
-                numeric_df = pd.DataFrame(stats["numerical"])
-                numeric_df.to_excel(writer, sheet_name="numeric_stats", index=True)
-            except Exception:
-                pass
-
-        insight_rows = []
-        for key, vals in insights.items():
-            if isinstance(vals, list):
-                for v in vals:
-                    insight_rows.append({"category": key, "insight": str(v)})
-        if insight_rows:
-            pd.DataFrame(insight_rows).to_excel(writer, sheet_name="insights", index=False)
-
-        if dataset_path and os.path.exists(dataset_path):
-            try:
-                preview = pd.read_csv(dataset_path).head(5000)
-                preview.to_excel(writer, sheet_name="dataset_preview", index=False)
-            except Exception:
-                pass
-
-        ml = job.get("ml")
-        if isinstance(ml, dict):
-            ml_rows = [{"key": k, "value": str(v)} for k, v in ml.items()]
-            pd.DataFrame(ml_rows).to_excel(writer, sheet_name="ml", index=False)
-
-    return report_path
+    except Exception as e:
+        # Fallback: always provide downloadable CSV if Excel dependency fails.
+        _log(job_id, f"Excel writer unavailable ({e}); falling back to CSV summary.")
+        fallback_path = os.path.join(settings.reports_dir, f"report_{job_id}_excel_fallback.csv")
+        summary_df.to_csv(fallback_path, index=False)
+        return (
+            fallback_path,
+            "text/csv",
+            f"DataScribe_Report_{_safe_name(str(job.get('filename', job_id)))}_fallback.csv",
+        )
 
 
 def _write_r_code(job_id: str, job: Dict[str, Any]) -> str:
@@ -697,6 +713,47 @@ def _get_job_or_404(job_id: str, db=None) -> Dict[str, Any]:
     raise HTTPException(status_code=404, detail="Job not found")
 
 
+def _download_unavailable_response(file_label: str, job_id: Optional[str] = None, reason: Optional[str] = None) -> HTMLResponse:
+    """Friendly fallback page shown when downloads fail on constrained environments."""
+    safe_job = _safe_name(job_id) if job_id else "unknown"
+    safe_reason = str(reason or "temporary server constraint")
+    html = f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Download Temporarily Unavailable</title>
+  <style>
+    body{{font-family:Arial,sans-serif;background:#fff5f5;margin:0;padding:24px;color:#2d3748}}
+    .card{{max-width:760px;margin:40px auto;background:#ffffff;border:2px solid #feb2b2;border-radius:14px;padding:24px}}
+    h1{{color:#c53030;margin-top:0}}
+    p{{line-height:1.6}}
+    .muted{{color:#718096;font-size:13px}}
+    .btn{{display:inline-block;background:#c53030;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;margin-right:10px}}
+    .btn.secondary{{background:#2b6cb0}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>We are really sorry - this download is temporarily unavailable</h1>
+    <p>
+      You are very close to your goal, and we truly understand how frustrating this feels.
+      Right now, because we are running on Render free tier, large file generation/download can fail due to memory or timeout limits.
+    </p>
+    <p>
+      Please bear with us for now. If you email us, we will be more than happy to help you quickly and share the required file.
+      Thank you so much for your patience and support.
+    </p>
+    <p><strong>Requested file:</strong> {file_label}<br><strong>Job ID:</strong> {safe_job}</p>
+    <a class="btn" href="mailto:workanushree14@gmail.com?subject=DataScribe%20Download%20Help%20-%20{safe_job}&body=Hi%20DataScribe%20team,%0A%0AI%20could%20not%20download%20the%20file%20from%20job%20ID%20{safe_job}.%20Please%20help.%0A%0AThank%20you.">Email Support</a>
+    <a class="btn secondary" href="/">Back to Home</a>
+    <p class="muted">Internal note: {safe_reason}</p>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html, status_code=200)
+
+
 def _render_template(request: Request, name: str, context: Dict[str, Any], status_code: int = 200):
     """
     Compatibility wrapper for Starlette/FastAPI TemplateResponse signatures.
@@ -988,52 +1045,71 @@ async def get_results(request: Request, job_id: str, db=Depends(get_db)):
 
 @app.get("/download/{job_id}/dataset")
 async def download_dataset(job_id: str, db=Depends(get_db)):
-    job = _get_job_or_404(job_id, db=db)
-    dataset_path = job.get("dataset_path")
-    if not dataset_path or not os.path.exists(dataset_path):
-        raise HTTPException(status_code=404, detail="Dataset file not found")
-    return FileResponse(dataset_path, media_type="text/csv", filename=f"DataScribe_{job_id}.csv")
+    try:
+        job = _get_job_or_404(job_id, db=db)
+        dataset_path = job.get("dataset_path")
+        if not dataset_path or not os.path.exists(dataset_path):
+            raise FileNotFoundError("dataset file not found")
+        return FileResponse(dataset_path, media_type="text/csv", filename=f"DataScribe_{job_id}.csv")
+    except Exception as e:
+        _log(job_id, f"Dataset download failed: {e}")
+        return _download_unavailable_response("Dataset CSV", job_id=job_id, reason=e)
 
 
 @app.get("/download/{job_id}/report/html")
 async def download_html_report(job_id: str, db=Depends(get_db)):
-    job = _get_job_or_404(job_id, db=db)
-    html_content = generate_html_report(job)
-    report_path = os.path.join(settings.reports_dir, f"report_{job_id}.html")
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
-    return FileResponse(report_path, media_type="text/html", filename=f"DataScribe_Report_{job_id}.html")
+    try:
+        job = _get_job_or_404(job_id, db=db)
+        html_content = generate_html_report(job)
+        report_path = os.path.join(settings.reports_dir, f"report_{job_id}.html")
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        return FileResponse(report_path, media_type="text/html", filename=f"DataScribe_Report_{job_id}.html")
+    except Exception as e:
+        _log(job_id, f"HTML download failed: {e}")
+        return _download_unavailable_response("HTML report", job_id=job_id, reason=e)
 
 
 @app.get("/download/{job_id}/report/pdf")
 async def download_pdf_report(job_id: str, db=Depends(get_db)):
-    job = _get_job_or_404(job_id, db=db)
-    _log(job_id, "Preparing PDF download.")
-    report_path = _write_pdf_report(job_id, job)
-    dataset_label = _safe_name(str(job.get("filename", job_id)))
-    return FileResponse(report_path, media_type="application/pdf", filename=f"DataScribe_Report_{dataset_label}.pdf")
+    try:
+        job = _get_job_or_404(job_id, db=db)
+        _log(job_id, "Preparing PDF download.")
+        dataset_label = _safe_name(str(job.get("filename", job_id)))
+        report_path = _write_pdf_report(job_id, job)
+        return FileResponse(report_path, media_type="application/pdf", filename=f"DataScribe_Report_{dataset_label}.pdf")
+    except Exception as e:
+        _log(job_id, f"PDF download failed: {e}")
+        return _download_unavailable_response("PDF report", job_id=job_id, reason=e)
 
 
 @app.get("/download/{job_id}/report/excel")
 async def download_excel_report(job_id: str, db=Depends(get_db)):
-    job = _get_job_or_404(job_id, db=db)
-    _log(job_id, "Preparing Excel download.")
-    report_path = _write_excel_report(job_id, job)
-    dataset_label = _safe_name(str(job.get("filename", job_id)))
-    return FileResponse(
-        report_path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=f"DataScribe_Report_{dataset_label}.xlsx",
-    )
+    try:
+        job = _get_job_or_404(job_id, db=db)
+        _log(job_id, "Preparing Excel download.")
+        report_path, media_type, download_name = _write_excel_report(job_id, job)
+        return FileResponse(
+            report_path,
+            media_type=media_type,
+            filename=download_name,
+        )
+    except Exception as e:
+        _log(job_id, f"Excel download failed: {e}")
+        return _download_unavailable_response("Excel report", job_id=job_id, reason=e)
 
 
 @app.get("/download/{job_id}/code/r")
 async def download_r_code(job_id: str, db=Depends(get_db)):
-    job = _get_job_or_404(job_id, db=db)
-    _log(job_id, "Preparing R code download.")
-    r_path = _write_r_code(job_id, job)
-    dataset_label = _safe_name(str(job.get("filename", job_id)))
-    return FileResponse(r_path, media_type="text/plain", filename=f"DataScribe_Analysis_{dataset_label}.R")
+    try:
+        job = _get_job_or_404(job_id, db=db)
+        _log(job_id, "Preparing R code download.")
+        r_path = _write_r_code(job_id, job)
+        dataset_label = _safe_name(str(job.get("filename", job_id)))
+        return FileResponse(r_path, media_type="text/plain", filename=f"DataScribe_Analysis_{dataset_label}.R")
+    except Exception as e:
+        _log(job_id, f"R code download failed: {e}")
+        return _download_unavailable_response("R code", job_id=job_id, reason=e)
 
 
 # ---------------------------------------------------------------------------
